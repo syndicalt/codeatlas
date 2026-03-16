@@ -1,16 +1,20 @@
 """RAG query endpoints for natural language codebase exploration."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.config import settings
 from app.dependencies import get_current_user
 from app.middleware.rate_limit import limiter
 from app.models.schemas import RagIndexStatus, RagQueryRequest, RagQueryResponse
-from app.services.database import get_api_key_for_provider
+from app.services.database import get_api_key_for_provider, get_api_keys
 from app.services.encryption import decrypt
 from app.services.graph_builder import project_store
 from app.services.rag_agent import query_agent
 from app.services.vector_index import get_or_build_index, index_store
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -27,6 +31,18 @@ async def _resolve_llm_config(user: dict | None) -> tuple[str | None, str | None
     model = user.get("preferred_model") or ""
 
     encrypted_key = await get_api_key_for_provider(user["id"], provider_name)
+
+    # If preferred provider has no key, try to find any available LLM key
+    if not encrypted_key:
+        all_keys = await get_api_keys(user["id"])
+        llm_providers = {"anthropic", "openai", "google", "ollama", "xai"}
+        for k in all_keys:
+            if k["provider"] in llm_providers:
+                encrypted_key = await get_api_key_for_provider(user["id"], k["provider"])
+                if encrypted_key:
+                    provider_name = k["provider"]
+                    break
+
     if not encrypted_key:
         return None, None, None
 
@@ -53,14 +69,21 @@ async def rag_query(
 
     api_key, provider_name, model = await _resolve_llm_config(user)
 
-    agent_resp, conversation_id = await query_agent(
-        project_id=project_id,
-        message=body.message,
-        conversation_id=body.conversation_id,
-        api_key=api_key,
-        provider_name=provider_name,
-        model=model,
-    )
+    try:
+        agent_resp, conversation_id = await query_agent(
+            project_id=project_id,
+            message=body.message,
+            conversation_id=body.conversation_id,
+            api_key=api_key,
+            provider_name=provider_name,
+            model=model,
+        )
+    except Exception as exc:
+        logger.exception("RAG query failed for project %s", project_id)
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM provider error: {exc}",
+        )
 
     return RagQueryResponse(
         project_id=project_id,

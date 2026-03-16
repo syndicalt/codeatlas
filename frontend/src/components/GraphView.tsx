@@ -480,6 +480,11 @@ export default function GraphView() {
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('codeatlas-panel-width')
+    return saved ? Math.max(240, Math.min(800, Number(saved))) : 320
+  })
+  const isDraggingRef = useRef(false)
 
   // Collaboration
   const { peers, connected: collabConnected } = useCollaboration(projectId)
@@ -491,6 +496,38 @@ export default function GraphView() {
       setHasApiKey(false)
     }
   }, [user])
+
+  const panelWidthRef = useRef(panelWidth)
+  panelWidthRef.current = panelWidth
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDraggingRef.current = true
+    const startX = e.clientX
+    const startWidth = panelWidthRef.current
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDraggingRef.current) return
+      const delta = startX - ev.clientX
+      const newWidth = Math.max(240, Math.min(800, startWidth + delta))
+      setPanelWidth(newWidth)
+    }
+
+    const onMouseUp = () => {
+      isDraggingRef.current = false
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      localStorage.setItem('codeatlas-panel-width', String(panelWidthRef.current))
+      cyRef.current?.resize()
+    }
+
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }, [])
 
   const getConnections = useCallback((nodeId: string) => {
     if (!graphElements) return { incoming: [] as GraphEdge[], outgoing: [] as GraphEdge[] }
@@ -504,15 +541,14 @@ export default function GraphView() {
     return graphElements?.nodes.find((n) => n.data.id === nodeId)?.data.label ?? nodeId
   }, [graphElements])
 
-  // Resize Cytoscape when panel is toggled
+  // Resize Cytoscape when panel is toggled or resized
   useEffect(() => {
     const cy = cyRef.current
     if (!cy) return
-    // Resize immediately for the interim, and again after the CSS transition finishes
     cy.resize()
     const timer = setTimeout(() => { cy.resize() }, 250)
     return () => clearTimeout(timer)
-  }, [panelOpen])
+  }, [panelOpen, panelWidth])
 
   // Update Cytoscape style when theme changes
   useEffect(() => {
@@ -1174,17 +1210,41 @@ export default function GraphView() {
           </div>
         </div>
 
-        {/* Detail panel (right side) — always in DOM, hidden via width */}
+        {/* Detail panel (right side) — resizable */}
+        {panelOpen && (
+          <div
+            onMouseDown={handleResizeStart}
+            style={{
+              width: 4,
+              cursor: 'col-resize',
+              backgroundColor: 'transparent',
+              flexShrink: 0,
+              position: 'relative',
+              zIndex: 10,
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 1,
+              width: 2,
+              backgroundColor: theme.panelBorder,
+              transition: 'background-color 0.15s',
+            }} />
+          </div>
+        )}
         <div
-          className="flex flex-col min-h-0 overflow-hidden transition-[width] duration-200"
+          className="flex flex-col min-h-0 overflow-hidden"
           style={{
-            width: panelOpen ? 320 : 0,
+            width: panelOpen ? panelWidth : 0,
             flexShrink: 0,
             backgroundColor: theme.panelBg,
             borderLeft: panelOpen ? `1px solid ${theme.panelBorder}` : 'none',
+            transition: panelOpen ? 'none' : 'width 0.2s',
           }}
         >
-          <div className="w-80 flex flex-col h-full">
+          <div className="flex flex-col h-full" style={{ minWidth: panelWidth }}>
             {/* Tab switcher */}
             <div className="flex shrink-0" style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}` }}>
               <button

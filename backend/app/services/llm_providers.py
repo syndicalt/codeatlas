@@ -50,7 +50,7 @@ class AnthropicProvider(LLMProvider):
     ) -> LLMResponse:
         import anthropic
 
-        client = anthropic.Anthropic(api_key=self.api_key)
+        client = anthropic.AsyncAnthropic(api_key=self.api_key)
 
         kwargs: dict = {
             "model": self.model,
@@ -62,7 +62,7 @@ class AnthropicProvider(LLMProvider):
         if tools:
             kwargs["tools"] = tools
 
-        response = client.messages.create(**kwargs)
+        response = await client.messages.create(**kwargs)
 
         text_parts = []
         tool_calls = []
@@ -185,13 +185,13 @@ class OpenAIProvider(LLMProvider):
         max_tokens: int = 2048,
     ) -> LLMResponse:
         import json
-        from openai import OpenAI
+        from openai import AsyncOpenAI
 
         client_kwargs: dict = {"api_key": self.api_key}
         if self.base_url:
             client_kwargs["base_url"] = self.base_url
 
-        client = OpenAI(**client_kwargs)
+        client = AsyncOpenAI(**client_kwargs)
 
         openai_messages = _anthropic_messages_to_openai(messages, system)
         kwargs: dict = {
@@ -202,7 +202,7 @@ class OpenAIProvider(LLMProvider):
         if tools:
             kwargs["tools"] = _anthropic_tools_to_openai(tools)
 
-        response = client.chat.completions.create(**kwargs)
+        response = await client.chat.completions.create(**kwargs)
         choice = response.choices[0]
         message = choice.message
 

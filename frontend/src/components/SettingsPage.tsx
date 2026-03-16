@@ -74,6 +74,15 @@ export default function SettingsPage() {
       setNewKeyValue('')
       const keys = await listApiKeys()
       setApiKeys(keys)
+
+      // Auto-set preferred provider to match the key just saved
+      if (preferredProvider !== newKeyProvider) {
+        setPreferredProvider(newKeyProvider)
+        setPreferredModel('')
+        await updatePreferences('', newKeyProvider)
+        await refreshUser()
+      }
+
       setMessage('API key saved')
     } catch (err: any) {
       setMessage(err.message)
