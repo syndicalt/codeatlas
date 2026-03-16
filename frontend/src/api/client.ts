@@ -205,7 +205,7 @@ export async function createShareLink(projectId: string): Promise<{ share_id: st
   return res.json()
 }
 
-export async function fetchSharedGraph(shareId: string): Promise<{ share_id: string; project_id: string; elements: GraphElements }> {
+export async function fetchSharedGraph(shareId: string): Promise<{ share_id: string; project_id: string; elements: import('../types/graph').GraphElements }> {
   const res = await fetch(`${BASE}/share/${shareId}`)
   if (!res.ok) throw new Error('Shared graph not found')
   return res.json()

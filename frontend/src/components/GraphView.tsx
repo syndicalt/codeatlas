@@ -11,7 +11,7 @@ import {
 } from '../api/client'
 import type {
   GraphElements, GraphNode, GraphEdge, DependencyScope,
-  CommitInfo, GraphDelta, ContributorInfo,
+  CommitInfo, ContributorInfo,
 } from '../types/graph'
 import TimeSlider from './TimeSlider'
 import ChatPanel from './ChatPanel'
@@ -139,7 +139,8 @@ const THEMES: Record<string, Theme> = {
 
 const THEME_KEYS = Object.keys(THEMES)
 
-function buildCytoStyle(t: Theme): cytoscape.Stylesheet[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildCytoStyle(t: Theme): any[] {
   return [
     {
       selector: 'node',
@@ -343,7 +344,7 @@ function createCy(
   // Fade-in: start transparent and animate to full opacity
   if (animated) {
     cy.elements().style('opacity', 0)
-    cy.animate({ style: {} as any, duration: 0 }) // force a frame
+    ;(cy as any).animate({ style: {}, duration: 0 }) // force a frame
     let frame = 0
     const fadeIn = () => {
       frame++
@@ -422,7 +423,7 @@ function morphGraph(
     animate: true,
     animationDuration: 600,
     fit: true,
-  }).run()
+  } as any).run()
 
   // Apply delta classes
   if (delta) {
