@@ -1,0 +1,124 @@
+import { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ingestGitHub, ingestUpload } from '../api/client'
+
+export default function LandingPage() {
+  const navigate = useNavigate()
+  const [url, setUrl] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleGitHub = async () => {
+    if (!url.trim()) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await ingestGitHub(url.trim())
+      navigate(`/graph/${res.project_id}`)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleFile = useCallback(async (file: File) => {
+    if (!file.name.endsWith('.zip')) {
+      setError('Only .zip files are accepted')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const res = await ingestUpload(file)
+      navigate(`/graph/${res.project_id}`)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [navigate])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file)
+  }, [handleFile])
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+      <h1 className="text-5xl font-bold mb-2 text-white">CodeAtlas</h1>
+      <p className="text-slate-400 mb-12 text-lg">
+        Transform codebases into interactive knowledge graphs
+      </p>
+
+      <div className="w-full max-w-xl space-y-6">
+        {/* GitHub URL input */}
+        <div className="flex gap-3">
+          <input
+            type="text"
+            placeholder="https://github.com/owner/repo"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGitHub()}
+            disabled={loading}
+            className="flex-1 px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg
+                       text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={handleGitHub}
+            disabled={loading || !url.trim()}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700
+                       disabled:text-slate-500 text-white rounded-lg font-medium transition"
+          >
+            Parse
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4 text-slate-500">
+          <div className="flex-1 h-px bg-slate-700" />
+          <span>or</span>
+          <div className="flex-1 h-px bg-slate-700" />
+        </div>
+
+        {/* ZIP drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = '.zip'
+            input.onchange = () => {
+              if (input.files?.[0]) handleFile(input.files[0])
+            }
+            input.click()
+          }}
+          className={`border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition
+            ${dragOver
+              ? 'border-blue-500 bg-blue-500/10'
+              : 'border-slate-600 hover:border-slate-400'
+            }`}
+        >
+          <p className="text-slate-300 text-lg">
+            Drop a .zip file here or click to browse
+          </p>
+        </div>
+
+        {/* Loading / Error */}
+        {loading && (
+          <div className="text-center">
+            <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-slate-400 mt-2">Analyzing codebase...</p>
+          </div>
+        )}
+        {error && (
+          <p className="text-red-400 text-center">{error}</p>
+        )}
+      </div>
+    </div>
+  )
+}

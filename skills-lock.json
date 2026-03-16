@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "shiplog": {
+      "source": "devallibus/shiplog",
+      "sourceType": "github",
+      "computedHash": "73cdddb791151a4eb3971c18ee1386faeb77f478921802c5e373617e9551f091"
+    }
+  }
+}
