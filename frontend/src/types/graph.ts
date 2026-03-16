@@ -109,3 +109,48 @@ export interface ContributorData {
   project_id: string
   contributors: Record<string, ContributorInfo>
 }
+
+// --- RAG types ---
+
+export interface RagQueryRequest {
+  message: string
+  conversation_id?: string | null
+}
+
+export interface CodeSnippet {
+  file: string
+  start_line: number
+  end_line: number
+  label: string
+}
+
+export interface RagQueryResponse {
+  project_id: string
+  message_id: string
+  conversation_id: string
+  text: string
+  highlighted_nodes: string[]
+  subgraph_elements: GraphElements | null
+  code_snippets: CodeSnippet[]
+  confidence: string
+  follow_up_suggestions: string[]
+  is_local_only: boolean
+}
+
+export interface RagIndexStatus {
+  project_id: string
+  indexed: boolean
+  doc_count: number
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  highlighted_nodes?: string[]
+  subgraph_elements?: GraphElements | null
+  code_snippets?: CodeSnippet[]
+  confidence?: string
+  follow_up_suggestions?: string[]
+  is_local_only?: boolean
+}

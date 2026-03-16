@@ -34,27 +34,31 @@ CodeAtlas is being developed in five phases. Each phase builds on the previous o
 - [x] Node detail modal with focus management
 - [x] Backend test suite expanded to 21 tests
 
-## Phase 3: History Integration
+## Phase 3: History Integration :white_check_mark:
 
-**Focus:** Git-aware analysis and time-based views
+**Status: Complete**
 
-- [ ] Full Git history analysis (not just shallow clone)
-- [ ] Time slider to view graph at any commit
-- [ ] Churn metrics — lines changed per module over time
-- [ ] Change highlighting — added/removed/modified nodes between commits
-- [ ] Contributor visualization — who works on what
-- [ ] Branch comparison graphs
+- [x] Full Git history analysis (opt-in full clone with sampled snapshots)
+- [x] Time slider to view graph at any commit (with play/pause animation)
+- [x] Churn metrics — lines changed per module over time
+- [x] Change highlighting — added/removed/modified nodes between commits
+- [x] Contributor visualization — who works on what (panel + graph highlighting)
+- [x] Graph diff between any two commits
+- [x] Animated graph morphing for history transitions
+- [x] JSON import — re-upload exported graphs to rebuild
 
-## Phase 4: RAG Agent
+## Phase 4: RAG Agent :white_check_mark:
 
-**Focus:** Natural language querying
+**Status: Complete**
 
-- [ ] Vector embeddings of graph data and commit messages (FAISS)
-- [ ] LLM-powered query agent for natural language questions
-- [ ] Chat-like query interface in the dashboard
-- [ ] Response types: text explanations, highlighted subgraphs, code snippets
-- [ ] Query examples: "Why was this module refactored?", "Show all callers of function X"
-- [ ] Guardrails for ambiguous queries
+- [x] Vector embeddings of graph data and commit messages (FAISS + sentence-transformers)
+- [x] LLM-powered query agent for natural language questions (Anthropic Claude API with tool-use)
+- [x] Chat-like query interface in the dashboard (tabbed panel with Details/Ask AI)
+- [x] Response types: text explanations, highlighted subgraphs, code snippets
+- [x] Query examples: "Why was this module refactored?", "Show all callers of function X"
+- [x] Guardrails for ambiguous queries (confidence scoring, local-only fallback)
+- [x] Conversation memory with bounded history
+- [x] Local-only mode when no API key is set (vector search fallback)
 
 ## Phase 5: Polish & Extensibility
 

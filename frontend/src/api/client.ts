@@ -8,7 +8,10 @@ import type {
   GraphAtCommit,
   ChurnData,
   ContributorData,
+  RagQueryResponse,
+  RagIndexStatus,
 } from '../types/graph'
+import { getAuthHeaders } from './auth'
 
 const BASE = '/api'
 
@@ -19,7 +22,7 @@ export async function ingestGitHub(
 ): Promise<IngestResponse> {
   const res = await fetch(`${BASE}/ingest/github`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({
       url,
       branch: branch || null,
@@ -38,6 +41,7 @@ export async function ingestUpload(file: File): Promise<IngestResponse> {
   form.append('file', file)
   const res = await fetch(`${BASE}/ingest/upload`, {
     method: 'POST',
+    headers: getAuthHeaders(),
     body: form,
   })
   if (!res.ok) {
@@ -62,7 +66,7 @@ export async function ingestImportJSON(file: File): Promise<IngestResponse> {
 }
 
 export async function ingestDemo(): Promise<IngestResponse> {
-  const res = await fetch(`${BASE}/ingest/demo`, { method: 'POST' })
+  const res = await fetch(`${BASE}/ingest/demo`, { method: 'POST', headers: getAuthHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || 'Demo failed')
@@ -156,5 +160,39 @@ export async function fetchChurn(projectId: string): Promise<ChurnData> {
 export async function fetchContributors(projectId: string): Promise<ContributorData> {
   const res = await fetch(`${BASE}/history/${projectId}/contributors`)
   if (!res.ok) throw new Error('Contributor data not available')
+  return res.json()
+}
+
+// --- RAG API ---
+
+export async function ragQuery(
+  projectId: string,
+  message: string,
+  conversationId?: string | null,
+): Promise<RagQueryResponse> {
+  const res = await fetch(`${BASE}/rag/${projectId}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      message,
+      conversation_id: conversationId || null,
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Query failed')
+  }
+  return res.json()
+}
+
+export async function ragIndexStatus(projectId: string): Promise<RagIndexStatus> {
+  const res = await fetch(`${BASE}/rag/${projectId}/index-status`)
+  if (!res.ok) throw new Error('Index status not available')
+  return res.json()
+}
+
+export async function ragBuildIndex(projectId: string): Promise<{ indexed: boolean; doc_count: number }> {
+  const res = await fetch(`${BASE}/rag/${projectId}/build-index`, { method: 'POST' })
+  if (!res.ok) throw new Error('Index build failed')
   return res.json()
 }

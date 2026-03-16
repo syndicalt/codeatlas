@@ -1,18 +1,33 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { ingestGitHub, ingestUpload, ingestDemo, ingestImportJSON } from '../api/client'
 import { useTaskPolling } from '../hooks/useTaskPolling'
+import { useAuth } from '../contexts/AuthContext'
+import { listAtlasHistory } from '../api/auth'
+import type { AtlasHistoryEntry } from '../types/auth'
+import LoginModal from './LoginModal'
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const { user, logout } = useAuth()
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [analyzeHistory, setAnalyzeHistory] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [recentAtlases, setRecentAtlases] = useState<AtlasHistoryEntry[]>([])
 
   const task = useTaskPolling(pendingId)
+
+  useEffect(() => {
+    if (user) {
+      listAtlasHistory().then(setRecentAtlases).catch(() => {})
+    } else {
+      setRecentAtlases([])
+    }
+  }, [user])
 
   // Navigate when task completes
   useEffect(() => {
@@ -71,7 +86,39 @@ export default function LandingPage() {
   const progress = task?.progress ?? 0
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 relative">
+      {/* Top-right auth controls */}
+      <div className="absolute top-4 right-6 flex items-center gap-3">
+        {user ? (
+          <>
+            <Link to="/settings" className="text-sm text-slate-400 hover:text-white transition">
+              Settings
+            </Link>
+            <button
+              onClick={logout}
+              className="text-sm text-slate-400 hover:text-white transition"
+            >
+              Sign out
+            </button>
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt="" className="w-7 h-7 rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-medium text-white">
+                {(user.name || user.email || '?')[0].toUpperCase()}
+              </div>
+            )}
+          </>
+        ) : (
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className="px-4 py-1.5 text-sm text-slate-300 border border-slate-600
+                       hover:border-slate-400 hover:text-white rounded-lg transition"
+          >
+            Sign in
+          </button>
+        )}
+      </div>
+
       <h1 className="text-5xl font-bold mb-2 text-white">CodeAtlas</h1>
       <p className="text-slate-400 mb-12 text-lg">
         Transform codebases into interactive knowledge graphs
@@ -175,7 +222,33 @@ export default function LandingPage() {
         {error && (
           <p className="text-red-400 text-center">{error}</p>
         )}
+
+        {/* Recent Atlases */}
+        {user && recentAtlases.length > 0 && (
+          <div className="mt-4 space-y-2">
+            <h3 className="text-sm text-slate-400 font-medium">Recent Atlases</h3>
+            {recentAtlases.slice(0, 5).map((entry) => (
+              <Link
+                key={entry.id}
+                to={`/graph/${entry.project_id}`}
+                className="block px-4 py-3 bg-slate-800/50 border border-slate-700/50
+                           hover:border-slate-500 rounded-lg transition"
+              >
+                <div className="text-sm text-slate-200">
+                  {entry.name || entry.source_url || entry.project_id.slice(0, 8)}
+                </div>
+                <div className="text-xs text-slate-500">
+                  {entry.node_count} nodes, {entry.edge_count} edges
+                  {' \u00b7 '}{new Date(entry.created_at).toLocaleDateString()}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Login modal */}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
   )
 }

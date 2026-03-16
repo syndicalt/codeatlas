@@ -125,3 +125,87 @@ class DiffResponse(BaseModel):
     to_sha: str
     delta: GraphDeltaSchema
     elements: dict
+
+
+# --- RAG schemas ---
+
+class RagQueryRequest(BaseModel):
+    message: str
+    conversation_id: str | None = None
+
+
+class CodeSnippetSchema(BaseModel):
+    file: str
+    start_line: int = 0
+    end_line: int = 0
+    label: str = ""
+
+
+class RagQueryResponse(BaseModel):
+    project_id: str
+    message_id: str
+    conversation_id: str
+    text: str
+    highlighted_nodes: list[str] = []
+    subgraph_elements: dict | None = None
+    code_snippets: list[CodeSnippetSchema] = []
+    confidence: str = "medium"
+    follow_up_suggestions: list[str] = []
+    is_local_only: bool = False
+
+
+class RagIndexStatus(BaseModel):
+    project_id: str
+    indexed: bool
+    doc_count: int = 0
+
+
+# --- Auth & User schemas ---
+
+class OAuthRedirectResponse(BaseModel):
+    url: str
+
+
+class AuthTokenResponse(BaseModel):
+    token: str
+    user: "UserProfileResponse"
+
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    avatar_url: str
+    oauth_provider: str
+    preferred_model: str
+    preferred_provider: str
+    created_at: str
+
+
+class UpdatePreferencesRequest(BaseModel):
+    preferred_model: str = ""
+    preferred_provider: str = ""
+
+
+class SetApiKeyRequest(BaseModel):
+    key: str
+
+
+class ApiKeyEntry(BaseModel):
+    id: str
+    provider: str
+    created_at: str
+
+
+class AtlasHistoryEntry(BaseModel):
+    id: str
+    project_id: str
+    source_url: str
+    name: str
+    node_count: int
+    edge_count: int
+    created_at: str
+
+
+# Valid LLM provider names
+VALID_PROVIDERS = {"anthropic", "openai", "google", "ollama", "xai"}

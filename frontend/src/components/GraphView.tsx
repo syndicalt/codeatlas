@@ -10,6 +10,10 @@ import type {
   CommitInfo, GraphDelta, ContributorInfo,
 } from '../types/graph'
 import TimeSlider from './TimeSlider'
+import ChatPanel from './ChatPanel'
+import { useAuth } from '../contexts/AuthContext'
+import { listApiKeys } from '../api/auth'
+import LoginModal from './LoginModal'
 
 // --- Theme definitions ---
 
@@ -417,6 +421,23 @@ export default function GraphView() {
   const [contributors, setContributors] = useState<Record<string, ContributorInfo> | null>(null)
   const [showContributors, setShowContributors] = useState(false)
 
+  // Panel tab: 'details' or 'chat'
+  const [panelTab, setPanelTab] = useState<'details' | 'chat'>('details')
+
+  // Auth state
+  const { user, logout } = useAuth()
+  const [hasApiKey, setHasApiKey] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+
+  useEffect(() => {
+    if (user) {
+      listApiKeys().then((keys) => setHasApiKey(keys.length > 0)).catch(() => {})
+    } else {
+      setHasApiKey(false)
+    }
+  }, [user])
+
   const getConnections = useCallback((nodeId: string) => {
     if (!graphElements) return { incoming: [] as GraphEdge[], outgoing: [] as GraphEdge[] }
     return {
@@ -607,6 +628,27 @@ export default function GraphView() {
       }).catch(() => {})
     }
   }, [showContributors, projectId])
+
+  // Highlight specific node IDs (used by chat panel)
+  const highlightNodeIds = useCallback((nodeIds: string[]) => {
+    const cy = cyRef.current
+    if (!cy) return
+    const idSet = new Set(nodeIds)
+    cy.nodes().forEach((n) => {
+      if (idSet.has(n.id())) {
+        n.removeClass('dimmed').addClass('highlighted')
+      } else {
+        n.removeClass('highlighted').addClass('dimmed')
+      }
+    })
+    cy.edges().forEach((e) => {
+      if (idSet.has(e.data('source')) || idSet.has(e.data('target'))) {
+        e.removeClass('dimmed')
+      } else {
+        e.addClass('dimmed')
+      }
+    })
+  }, [])
 
   // Highlight nodes for a specific contributor
   const highlightContributor = useCallback((files: string[]) => {
@@ -894,6 +936,20 @@ export default function GraphView() {
             </button>
           )}
           <button
+            onClick={() => { setPanelTab('chat'); setPanelOpen(true) }}
+            className="px-2.5 py-1 text-xs rounded transition relative"
+            style={{
+              backgroundColor: panelTab === 'chat' && panelOpen ? theme.btnActiveBg : theme.btnBg,
+              color: panelTab === 'chat' && panelOpen ? theme.btnActiveText : theme.btnText,
+            }}
+            title="Ask AI about this codebase"
+          >
+            Ask AI
+            {user && !hasApiKey && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400" title="No API key configured" />
+            )}
+          </button>
+          <button
             onClick={() => handleExport('png')}
             className="px-2.5 py-1 text-xs rounded transition"
             style={{ backgroundColor: theme.btnBg, color: theme.btnText }}
@@ -917,6 +973,60 @@ export default function GraphView() {
           >
             {panelOpen ? 'Hide' : 'Show'} Panel
           </button>
+          {/* User menu */}
+          {user ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-7 h-7 rounded-full overflow-hidden border-2 transition"
+                style={{ borderColor: showUserMenu ? theme.btnActiveBg : theme.btnBg }}
+                title={user.name || user.email}
+              >
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs font-medium"
+                       style={{ backgroundColor: theme.btnActiveBg, color: theme.btnActiveText }}>
+                    {(user.name || user.email || '?')[0].toUpperCase()}
+                  </div>
+                )}
+              </button>
+              {showUserMenu && (
+                <div
+                  className="absolute right-0 top-9 z-50 w-44 rounded-lg shadow-lg py-1 text-sm"
+                  style={{ backgroundColor: theme.panelBg, border: `1px solid ${theme.panelBorder}` }}
+                >
+                  <div className="px-3 py-2 truncate" style={{ color: theme.textMuted, borderBottom: `1px solid ${theme.panelHeaderBorder}` }}>
+                    {user.email}
+                  </div>
+                  <Link
+                    to="/settings"
+                    className="block px-3 py-2 transition hover:opacity-80"
+                    style={{ color: theme.textPrimary }}
+                    onClick={() => setShowUserMenu(false)}
+                  >
+                    Settings
+                  </Link>
+                  <button
+                    onClick={() => { logout(); setShowUserMenu(false) }}
+                    className="w-full text-left px-3 py-2 transition hover:opacity-80"
+                    style={{ color: theme.textSecondary }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="px-2.5 py-1 text-xs rounded transition"
+              style={{ backgroundColor: theme.btnBg, color: theme.btnText }}
+            >
+              Sign in
+            </button>
+          )}
+
           <span className="text-xs" style={{ color: theme.textMuted }}>
             {stats.nodes}n / {stats.edges}e
           </span>
@@ -981,51 +1091,94 @@ export default function GraphView() {
           }}
         >
           <div className="w-80 flex flex-col h-full">
-            {/* Contributors section (collapsible, shown when active) */}
-            {showContributors && contributors && (
+            {/* Tab switcher */}
+            <div className="flex shrink-0" style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}` }}>
+              <button
+                onClick={() => setPanelTab('details')}
+                className="flex-1 px-4 py-2 text-sm font-medium transition"
+                style={{
+                  color: panelTab === 'details' ? theme.textPrimary : theme.textMuted,
+                  borderBottom: panelTab === 'details' ? `2px solid ${theme.btnActiveBg}` : '2px solid transparent',
+                }}
+              >
+                Details
+              </button>
+              <button
+                onClick={() => setPanelTab('chat')}
+                className="flex-1 px-4 py-2 text-sm font-medium transition"
+                style={{
+                  color: panelTab === 'chat' ? theme.textPrimary : theme.textMuted,
+                  borderBottom: panelTab === 'chat' ? `2px solid ${theme.btnActiveBg}` : '2px solid transparent',
+                }}
+              >
+                Ask AI
+              </button>
+            </div>
+
+            {/* Details tab */}
+            {panelTab === 'details' && (
               <>
+                {/* Contributors section (collapsible, shown when active) */}
+                {showContributors && contributors && (
+                  <>
+                    <div className="px-4 py-2.5 text-sm font-medium shrink-0"
+                         style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}`, color: theme.textSecondary }}>
+                      Contributors
+                    </div>
+                    <div className="overflow-y-auto shrink-0" style={{ maxHeight: '40%' }}>
+                      <div className="p-3 space-y-1">
+                        {Object.entries(contributors).map(([email, info]) => (
+                          <button
+                            key={email}
+                            onClick={() => highlightContributor(info.files)}
+                            className="w-full text-left px-3 py-2 rounded text-sm transition hover:opacity-80"
+                            style={{ backgroundColor: theme.badgeBg }}
+                          >
+                            <div className="font-medium" style={{ color: theme.textPrimary }}>{info.name}</div>
+                            <div className="text-xs" style={{ color: theme.textMuted }}>
+                              {info.commit_count} commits &middot; {info.files.length} files
+                            </div>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => cyRef.current?.elements().removeClass('dimmed highlighted')}
+                          className="w-full text-center px-3 py-1.5 rounded text-xs mt-2"
+                          style={{ backgroundColor: theme.btnBg, color: theme.btnText }}
+                        >
+                          Clear highlight
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Node details */}
                 <div className="px-4 py-2.5 text-sm font-medium shrink-0"
                      style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}`, color: theme.textSecondary }}>
-                  Contributors
+                  Node Details
                 </div>
-                <div className="overflow-y-auto shrink-0" style={{ maxHeight: '40%' }}>
-                  <div className="p-3 space-y-1">
-                    {Object.entries(contributors).map(([email, info]) => (
-                      <button
-                        key={email}
-                        onClick={() => highlightContributor(info.files)}
-                        className="w-full text-left px-3 py-2 rounded text-sm transition hover:opacity-80"
-                        style={{ backgroundColor: theme.badgeBg }}
-                      >
-                        <div className="font-medium" style={{ color: theme.textPrimary }}>{info.name}</div>
-                        <div className="text-xs" style={{ color: theme.textMuted }}>
-                          {info.commit_count} commits &middot; {info.files.length} files
-                        </div>
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => cyRef.current?.elements().removeClass('dimmed highlighted')}
-                      className="w-full text-center px-3 py-1.5 rounded text-xs mt-2"
-                      style={{ backgroundColor: theme.btnBg, color: theme.btnText }}
-                    >
-                      Clear highlight
-                    </button>
-                  </div>
+                <div className="flex-1 overflow-y-auto">
+                  {renderDetailPanel()}
                 </div>
               </>
             )}
 
-            {/* Details section (always visible) */}
-            <div className="px-4 py-2.5 text-sm font-medium shrink-0"
-                 style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}`, color: theme.textSecondary }}>
-              Details
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {renderDetailPanel()}
-            </div>
+            {/* Chat tab */}
+            {panelTab === 'chat' && projectId && (
+              <ChatPanel
+                projectId={projectId}
+                theme={theme}
+                onHighlightNodes={highlightNodeIds}
+                isSignedIn={!!user}
+                hasApiKey={hasApiKey}
+              />
+            )}
           </div>
         </div>
       </div>
+
+      {/* Login modal */}
+      {showLoginModal && <LoginModal onClose={() => setShowLoginModal(false)} />}
     </div>
   )
 }
