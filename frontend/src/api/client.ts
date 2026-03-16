@@ -4,15 +4,27 @@ import type {
   TaskStatus,
   SearchResult,
   DependencyScope,
+  HistoryTimeline,
+  GraphAtCommit,
+  ChurnData,
+  ContributorData,
 } from '../types/graph'
 
 const BASE = '/api'
 
-export async function ingestGitHub(url: string, branch?: string): Promise<IngestResponse> {
+export async function ingestGitHub(
+  url: string,
+  branch?: string,
+  analyzeHistory?: boolean,
+): Promise<IngestResponse> {
   const res = await fetch(`${BASE}/ingest/github`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, branch: branch || null }),
+    body: JSON.stringify({
+      url,
+      branch: branch || null,
+      analyze_history: analyzeHistory || false,
+    }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -31,6 +43,20 @@ export async function ingestUpload(file: File): Promise<IngestResponse> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail || 'Upload failed')
+  }
+  return res.json()
+}
+
+export async function ingestImportJSON(file: File): Promise<IngestResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/ingest/import`, {
+    method: 'POST',
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Import failed')
   }
   return res.json()
 }
@@ -94,4 +120,41 @@ export async function getCallChain(
 
 export function exportGraphJSON(projectId: string): string {
   return `${BASE}/graph/${projectId}/export?format=json`
+}
+
+// --- History API ---
+
+export async function fetchTimeline(projectId: string): Promise<HistoryTimeline> {
+  const res = await fetch(`${BASE}/history/${projectId}/timeline`)
+  if (!res.ok) throw new Error('History not available')
+  return res.json()
+}
+
+export async function fetchGraphAtCommit(projectId: string, sha: string): Promise<GraphAtCommit> {
+  const res = await fetch(`${BASE}/history/${projectId}/at/${sha}`)
+  if (!res.ok) throw new Error('Commit snapshot not found')
+  return res.json()
+}
+
+export async function fetchDiff(
+  projectId: string,
+  fromSha: string,
+  toSha: string,
+): Promise<{ from_sha: string; to_sha: string; delta: import('../types/graph').GraphDelta; elements: import('../types/graph').GraphElements }> {
+  const params = new URLSearchParams({ from_sha: fromSha, to_sha: toSha })
+  const res = await fetch(`${BASE}/history/${projectId}/diff?${params}`)
+  if (!res.ok) throw new Error('Diff not available')
+  return res.json()
+}
+
+export async function fetchChurn(projectId: string): Promise<ChurnData> {
+  const res = await fetch(`${BASE}/history/${projectId}/churn`)
+  if (!res.ok) throw new Error('Churn data not available')
+  return res.json()
+}
+
+export async function fetchContributors(projectId: string): Promise<ContributorData> {
+  const res = await fetch(`${BASE}/history/${projectId}/contributors`)
+  if (!res.ok) throw new Error('Contributor data not available')
+  return res.json()
 }

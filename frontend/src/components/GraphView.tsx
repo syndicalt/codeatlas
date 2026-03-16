@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import cytoscape from 'cytoscape'
-import { fetchGraph, searchGraph, filterGraph, exportGraphJSON } from '../api/client'
-import type { GraphElements, GraphNode, GraphEdge, DependencyScope } from '../types/graph'
+import {
+  fetchGraph, searchGraph, filterGraph, exportGraphJSON,
+  fetchTimeline, fetchGraphAtCommit, fetchContributors,
+} from '../api/client'
+import type {
+  GraphElements, GraphNode, GraphEdge, DependencyScope,
+  CommitInfo, GraphDelta, ContributorInfo,
+} from '../types/graph'
+import TimeSlider from './TimeSlider'
 
 // --- Theme definitions ---
 
@@ -113,33 +120,264 @@ function buildCytoStyle(t: Theme): cytoscape.Stylesheet[] {
     {
       selector: 'node',
       style: {
-        label: 'data(label)', 'text-valign': 'center', 'font-size': '11px',
-        color: t.nodeLabel, 'text-outline-color': t.nodeOutline, 'text-outline-width': 2,
-        width: 30, height: 30,
-      },
+        label: 'data(label)',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'font-size': '10px',
+        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        color: t.nodeLabel,
+        'text-outline-color': t.nodeOutline,
+        'text-outline-width': 1.5,
+        // Auto-size to fit label
+        width: 'label',
+        height: 'label',
+        'padding-top': '8px',
+        'padding-bottom': '8px',
+        'padding-left': '12px',
+        'padding-right': '12px',
+        // Subtle glow
+        'background-opacity': 0.9,
+        'border-width': 1.5,
+        'border-opacity': 0.4,
+        'border-color': t.edgeDefault,
+        // Smooth transitions
+        'transition-property': 'background-color, border-color, border-width, opacity, width, height',
+        'transition-duration': '300ms',
+        'transition-timing-function': 'ease-in-out-sine',
+      } as any,
     },
-    { selector: 'node.module', style: { 'background-color': t.module, shape: 'round-rectangle', width: 40, height: 40 } },
-    { selector: 'node.class', style: { 'background-color': t.class, shape: 'diamond', width: 35, height: 35 } },
-    { selector: 'node.function', style: { 'background-color': t.function, shape: 'ellipse' } },
     {
-      selector: 'node.external', style: {
-        'background-color': t.external, shape: 'round-rectangle',
-        'border-style': 'dashed', 'border-width': 2, 'border-color': t.externalBorder,
-      },
+      selector: 'node.module',
+      style: {
+        'background-color': t.module,
+        shape: 'round-rectangle',
+        'border-color': t.module,
+        'font-size': '11px',
+        'font-weight': 'bold' as any,
+      } as any,
     },
-    { selector: 'node.dimmed', style: { opacity: 0.2 } },
-    { selector: 'node.highlighted', style: { 'border-width': 3, 'border-color': t.highlight } },
     {
-      selector: 'edge', style: {
-        width: 1.5, 'line-color': t.edgeDefault, 'target-arrow-color': t.edgeDefault,
-        'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'arrow-scale': 0.8,
-      },
+      selector: 'node.class',
+      style: {
+        'background-color': t.class,
+        shape: 'diamond',
+        'border-color': t.class,
+        'padding-top': '14px',
+        'padding-bottom': '14px',
+        'padding-left': '18px',
+        'padding-right': '18px',
+      } as any,
     },
-    { selector: 'edge[relationship = "imports"]', style: { 'line-color': t.imports, 'target-arrow-color': t.imports, 'line-style': 'dashed' } },
-    { selector: 'edge[relationship = "inherits"]', style: { 'line-color': t.inherits, 'target-arrow-color': t.inherits, width: 2 } },
-    { selector: 'edge[relationship = "calls"]', style: { 'line-color': t.calls, 'target-arrow-color': t.calls, 'line-style': 'dotted' } },
-    { selector: 'edge.dimmed', style: { opacity: 0.1 } },
+    {
+      selector: 'node.function',
+      style: {
+        'background-color': t.function,
+        shape: 'ellipse',
+        'border-color': t.function,
+      } as any,
+    },
+    {
+      selector: 'node.external',
+      style: {
+        'background-color': t.external,
+        shape: 'round-rectangle',
+        'border-style': 'dashed',
+        'border-width': 2,
+        'border-color': t.externalBorder,
+        'border-opacity': 0.8,
+        'background-opacity': 0.6,
+        'font-style': 'italic' as any,
+      } as any,
+    },
+    {
+      selector: 'node:active',
+      style: { 'overlay-color': t.highlight, 'overlay-opacity': 0.15 },
+    },
+    { selector: 'node.dimmed', style: { opacity: 0.15, 'transition-duration': '400ms' } as any },
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 3,
+        'border-color': t.highlight,
+        'border-opacity': 1,
+        'background-opacity': 1,
+        'z-index': 10,
+      } as any,
+    },
+    {
+      selector: 'node.added',
+      style: {
+        'border-width': 3, 'border-color': '#22c55e', 'border-opacity': 1,
+        'background-opacity': 1,
+      } as any,
+    },
+    {
+      selector: 'node.removed',
+      style: {
+        opacity: 0.25, 'border-width': 3, 'border-color': '#ef4444', 'border-style': 'dashed',
+      } as any,
+    },
+    {
+      selector: 'node.modified',
+      style: {
+        'border-width': 3, 'border-color': '#eab308', 'border-opacity': 1,
+        'background-opacity': 1,
+      } as any,
+    },
+    {
+      selector: 'edge',
+      style: {
+        width: 1.2,
+        'line-color': t.edgeDefault,
+        'target-arrow-color': t.edgeDefault,
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'arrow-scale': 0.7,
+        opacity: 0.7,
+        'transition-property': 'opacity, line-color, width',
+        'transition-duration': '300ms',
+      } as any,
+    },
+    {
+      selector: 'edge[relationship = "imports"]',
+      style: { 'line-color': t.imports, 'target-arrow-color': t.imports, 'line-style': 'dashed', opacity: 0.6 },
+    },
+    {
+      selector: 'edge[relationship = "inherits"]',
+      style: { 'line-color': t.inherits, 'target-arrow-color': t.inherits, width: 2, opacity: 0.8 },
+    },
+    {
+      selector: 'edge[relationship = "calls"]',
+      style: { 'line-color': t.calls, 'target-arrow-color': t.calls, 'line-style': 'dotted', opacity: 0.5 },
+    },
+    { selector: 'edge.dimmed', style: { opacity: 0.06 } },
   ]
+}
+
+const LAYOUT_OPTIONS = {
+  name: 'cose',
+  animate: true,
+  animationDuration: 800,
+  animationEasing: 'ease-out-cubic' as const,
+  nodeDimensionsIncludeLabels: true,
+  idealEdgeLength: () => 140,
+  nodeRepulsion: () => 12000,
+  gravity: 0.3,
+  numIter: 300,
+  fit: true,
+  padding: 40,
+}
+
+/** Create a Cytoscape instance with animated entry */
+function createCy(
+  container: HTMLElement,
+  elements: GraphElements,
+  theme: Theme,
+  onTapNode: (data: any) => void,
+  onTapBg: () => void,
+  animated = true,
+): cytoscape.Core {
+  const cy = cytoscape({
+    container,
+    elements: [
+      ...elements.nodes.map((n) => ({ group: 'nodes' as const, ...n })),
+      ...elements.edges.map((e) => ({ group: 'edges' as const, ...e })),
+    ],
+    style: buildCytoStyle(theme),
+    layout: { ...LAYOUT_OPTIONS, animate: animated, animationDuration: animated ? 800 : 0 },
+  })
+
+  // Fade-in: start transparent and animate to full opacity
+  if (animated) {
+    cy.elements().style('opacity', 0)
+    cy.animate({ style: {} as any, duration: 0 }) // force a frame
+    let frame = 0
+    const fadeIn = () => {
+      frame++
+      const progress = Math.min(frame / 20, 1) // ~20 frames ≈ 330ms at 60fps
+      const ease = 1 - Math.pow(1 - progress, 3) // ease-out cubic
+      cy.elements().style('opacity', ease)
+      if (progress < 1) requestAnimationFrame(fadeIn)
+    }
+    // Start fade after layout begins positioning
+    setTimeout(() => requestAnimationFrame(fadeIn), 200)
+  }
+
+  cy.on('tap', 'node', (ev) => onTapNode(ev.target.data()))
+  cy.on('tap', (ev) => { if (ev.target === cy) onTapBg() })
+  return cy
+}
+
+/** Morph an existing Cytoscape instance to new elements (for history transitions) */
+function morphGraph(
+  cy: cytoscape.Core,
+  elements: GraphElements,
+  delta: { added_nodes: string[]; removed_nodes: string[]; modified_nodes: string[] } | null,
+) {
+  const newNodeIds = new Set(elements.nodes.map((n) => n.data.id))
+  const newEdgeIds = new Set(elements.edges.map((e) => e.data.id))
+  const existingNodeIds = new Set(cy.nodes().map((n) => n.id()))
+  const existingEdgeIds = new Set(cy.edges().map((e) => e.id()))
+
+  // Remove nodes/edges that are no longer present (animate fade-out)
+  cy.nodes().forEach((n) => {
+    if (!newNodeIds.has(n.id())) {
+      n.animate({ style: { opacity: 0 } as any, duration: 300, complete: () => n.remove() })
+    }
+  })
+  cy.edges().forEach((e) => {
+    if (!newEdgeIds.has(e.id())) {
+      e.animate({ style: { opacity: 0 } as any, duration: 200, complete: () => e.remove() })
+    }
+  })
+
+  // Update existing nodes' data
+  for (const node of elements.nodes) {
+    if (existingNodeIds.has(node.data.id)) {
+      const el = cy.$id(node.data.id)
+      el.data(node.data)
+      el.removeClass('added modified removed')
+    }
+  }
+
+  // Add new nodes (start invisible, fade in)
+  const nodesToAdd = elements.nodes.filter((n) => !existingNodeIds.has(n.data.id))
+  const edgesToAdd = elements.edges.filter((e) => !existingEdgeIds.has(e.data.id))
+
+  if (nodesToAdd.length > 0 || edgesToAdd.length > 0) {
+    const added = cy.add([
+      ...nodesToAdd.map((n) => ({ group: 'nodes' as const, ...n })),
+      ...edgesToAdd.map((e) => ({ group: 'edges' as const, ...e })),
+    ])
+    added.style('opacity', 0)
+    // Fade new elements in after layout starts
+    setTimeout(() => {
+      added.animate({ style: { opacity: 1 } as any, duration: 400 })
+    }, 100)
+  }
+
+  // Update existing edges' data
+  for (const edge of elements.edges) {
+    if (existingEdgeIds.has(edge.data.id)) {
+      cy.$id(edge.data.id).data(edge.data)
+    }
+  }
+
+  // Re-run layout with animation
+  cy.layout({
+    ...LAYOUT_OPTIONS,
+    animate: true,
+    animationDuration: 600,
+    fit: true,
+  }).run()
+
+  // Apply delta classes
+  if (delta) {
+    setTimeout(() => {
+      delta.added_nodes.forEach((id) => cy.$id(id).addClass('added'))
+      delta.modified_nodes.forEach((id) => cy.$id(id).addClass('modified'))
+    }, 150)
+  }
 }
 
 const NODE_TYPES = ['all', 'module', 'class', 'function', 'external'] as const
@@ -168,6 +406,16 @@ export default function GraphView() {
   // Theme
   const [themeKey, setThemeKey] = useState(() => localStorage.getItem('codeatlas-theme') || 'dark')
   const theme = THEMES[themeKey] || THEMES.dark
+  const themeRef = useRef(theme)
+  themeRef.current = theme
+
+  // History state
+  const [historyMode, setHistoryMode] = useState(false)
+  const [timeline, setTimeline] = useState<CommitInfo[] | null>(null)
+  const [commitIndex, setCommitIndex] = useState(0)
+  const [historyAvailable, setHistoryAvailable] = useState(false)
+  const [contributors, setContributors] = useState<Record<string, ContributorInfo> | null>(null)
+  const [showContributors, setShowContributors] = useState(false)
 
   const getConnections = useCallback((nodeId: string) => {
     if (!graphElements) return { incoming: [] as GraphEdge[], outgoing: [] as GraphEdge[] }
@@ -198,9 +446,9 @@ export default function GraphView() {
     if (cy) cy.style(buildCytoStyle(theme))
   }, [themeKey, theme])
 
-  // Load graph
+  // Load graph data and render
   useEffect(() => {
-    if (!projectId || !containerRef.current) return
+    if (!projectId) return
     let cancelled = false
 
     async function load() {
@@ -210,39 +458,47 @@ export default function GraphView() {
         const elements = res.elements as GraphElements
         setGraphElements(elements)
         setStats({ nodes: elements.nodes.length, edges: elements.edges.length })
-        renderGraph(elements)
         setLoading(false)
+
+        // Wait for loading overlay to be removed and container to have dimensions
+        requestAnimationFrame(() => {
+          if (cancelled || !containerRef.current) return
+          requestAnimationFrame(() => {
+            if (cancelled || !containerRef.current) return
+            cyRef.current?.destroy()
+            cyRef.current = createCy(
+              containerRef.current,
+              elements,
+              themeRef.current,
+              (data) => setSelected(data),
+              () => setSelected(null),
+              true, // animated
+            )
+          })
+        })
+
+        // Check if history data is available
+        fetchTimeline(projectId!).then((tl) => {
+          if (!cancelled && tl.commits.length > 0) {
+            setTimeline(tl.commits)
+            setHistoryAvailable(true)
+            setCommitIndex(tl.commits.length - 1)
+          }
+        }).catch(() => {})
       } catch (e: any) {
         if (!cancelled) setError(e.message)
         setLoading(false)
       }
     }
 
-    function renderGraph(elements: GraphElements) {
-      cyRef.current?.destroy()
-      const cy = cytoscape({
-        container: containerRef.current!,
-        elements: [
-          ...elements.nodes.map((n) => ({ group: 'nodes' as const, ...n })),
-          ...elements.edges.map((e) => ({ group: 'edges' as const, ...e })),
-        ],
-        style: buildCytoStyle(theme),
-        layout: {
-          name: 'cose',
-          animate: false,
-          nodeDimensionsIncludeLabels: true,
-          idealEdgeLength: () => 120,
-          nodeRepulsion: () => 8000,
-        },
-      })
-      cy.on('tap', 'node', (e) => setSelected(e.target.data()))
-      cy.on('tap', (e) => { if (e.target === cy) setSelected(null) })
-      cyRef.current = cy
-    }
-
     load()
-    return () => { cancelled = true; cyRef.current?.destroy() }
-  }, [projectId, theme])
+    return () => {
+      cancelled = true
+      cyRef.current?.destroy()
+      cyRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   // Search highlighting
   useEffect(() => {
@@ -280,6 +536,102 @@ export default function GraphView() {
     return () => clearTimeout(timeout)
   }, [searchQuery, typeFilter, projectId])
 
+  // History mode: load graph snapshot when commit changes
+  const handleCommitChange = useCallback((index: number) => {
+    if (!timeline || !projectId || !containerRef.current) return
+    const clamped = Math.max(0, Math.min(index, timeline.length - 1))
+    setCommitIndex(clamped)
+    const sha = timeline[clamped].sha
+
+    fetchGraphAtCommit(projectId, sha).then((res) => {
+      const elements = res.elements as GraphElements
+      setGraphElements(elements)
+      setStats({ nodes: elements.nodes.length, edges: elements.edges.length })
+
+      const cy = cyRef.current
+      if (cy) {
+        // Morph the existing graph smoothly
+        morphGraph(cy, elements, res.delta)
+      } else if (containerRef.current) {
+        // Fallback: create fresh if no existing instance
+        cyRef.current = createCy(
+          containerRef.current, elements, themeRef.current,
+          (data) => setSelected(data), () => setSelected(null), true,
+        )
+        if (res.delta) {
+          setTimeout(() => {
+            res.delta!.added_nodes.forEach((id) => cyRef.current?.$id(id).addClass('added'))
+            res.delta!.modified_nodes.forEach((id) => cyRef.current?.$id(id).addClass('modified'))
+          }, 200)
+        }
+      }
+    }).catch(() => {})
+  }, [timeline, projectId])
+
+  // Toggle history mode: reload latest graph when exiting
+  const toggleHistoryMode = useCallback(() => {
+    if (historyMode) {
+      // Exit history mode — reload the latest graph with animation
+      setHistoryMode(false)
+      if (projectId) {
+        fetchGraph(projectId).then((res) => {
+          const elements = res.elements as GraphElements
+          setGraphElements(elements)
+          setStats({ nodes: elements.nodes.length, edges: elements.edges.length })
+          cyRef.current?.destroy()
+          cyRef.current = createCy(
+            containerRef.current!, elements, themeRef.current,
+            (data) => setSelected(data), () => setSelected(null), true,
+          )
+        }).catch(() => {})
+      }
+    } else {
+      setHistoryMode(true)
+      if (timeline) {
+        handleCommitChange(timeline.length - 1)
+      }
+    }
+  }, [historyMode, projectId, timeline, handleCommitChange])
+
+  // Toggle contributor view
+  const toggleContributors = useCallback(() => {
+    if (showContributors) {
+      setShowContributors(false)
+      setContributors(null)
+      // Clear contributor highlighting
+      cyRef.current?.elements().removeClass('dimmed highlighted')
+    } else if (projectId) {
+      fetchContributors(projectId).then((res) => {
+        setContributors(res.contributors)
+        setShowContributors(true)
+      }).catch(() => {})
+    }
+  }, [showContributors, projectId])
+
+  // Highlight nodes for a specific contributor
+  const highlightContributor = useCallback((files: string[]) => {
+    const cy = cyRef.current
+    if (!cy) return
+    const fileSet = new Set(files)
+    cy.nodes().forEach((n) => {
+      const nodeFile = n.data('file')
+      if (nodeFile && fileSet.has(nodeFile)) {
+        n.removeClass('dimmed').addClass('highlighted')
+      } else {
+        n.removeClass('highlighted').addClass('dimmed')
+      }
+    })
+    cy.edges().forEach((e) => {
+      const srcFile = cy.$id(e.data('source')).data('file')
+      const tgtFile = cy.$id(e.data('target')).data('file')
+      if ((srcFile && fileSet.has(srcFile)) || (tgtFile && fileSet.has(tgtFile))) {
+        e.removeClass('dimmed')
+      } else {
+        e.addClass('dimmed')
+      }
+    })
+  }, [])
+
   // Dependency scope filter
   const handleScopeChange = async (newScope: DependencyScope) => {
     setScope(newScope)
@@ -292,19 +644,10 @@ export default function GraphView() {
       setStats({ nodes: elements.nodes.length, edges: elements.edges.length })
 
       cyRef.current?.destroy()
-      const cy = cytoscape({
-        container: containerRef.current,
-        elements: [
-          ...elements.nodes.map((n) => ({ group: 'nodes' as const, ...n })),
-          ...elements.edges.map((e) => ({ group: 'edges' as const, ...e })),
-        ],
-        style: buildCytoStyle(theme),
-        layout: { name: 'cose', animate: false, nodeDimensionsIncludeLabels: true,
-          idealEdgeLength: () => 120, nodeRepulsion: () => 8000 },
-      })
-      cy.on('tap', 'node', (e) => setSelected(e.target.data()))
-      cy.on('tap', (e) => { if (e.target === cy) setSelected(null) })
-      cyRef.current = cy
+      cyRef.current = createCy(
+        containerRef.current, elements, themeRef.current,
+        (data) => setSelected(data), () => setSelected(null), true,
+      )
     } catch {}
   }
 
@@ -451,7 +794,7 @@ export default function GraphView() {
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor: theme.bg }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: theme.bg }}>
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-2 gap-4"
               style={{ backgroundColor: theme.headerBg, borderBottom: `1px solid ${theme.headerBorder}` }}>
@@ -522,8 +865,34 @@ export default function GraphView() {
           ))}
         </div>
 
-        {/* Export + stats */}
+        {/* Export + history + stats */}
         <div className="flex items-center gap-2 shrink-0">
+          {historyAvailable && (
+            <button
+              onClick={toggleHistoryMode}
+              className="px-2.5 py-1 text-xs rounded transition"
+              style={{
+                backgroundColor: historyMode ? theme.btnActiveBg : theme.btnBg,
+                color: historyMode ? theme.btnActiveText : theme.btnText,
+              }}
+              title="Toggle history timeline"
+            >
+              History
+            </button>
+          )}
+          {historyAvailable && (
+            <button
+              onClick={toggleContributors}
+              className="px-2.5 py-1 text-xs rounded transition"
+              style={{
+                backgroundColor: showContributors ? theme.btnActiveBg : theme.btnBg,
+                color: showContributors ? theme.btnActiveText : theme.btnText,
+              }}
+              title="Toggle contributor view"
+            >
+              Contributors
+            </button>
+          )}
           <button
             onClick={() => handleExport('png')}
             className="px-2.5 py-1 text-xs rounded transition"
@@ -554,10 +923,20 @@ export default function GraphView() {
         </div>
       </header>
 
+      {/* Time slider (shown in history mode) */}
+      {historyMode && timeline && (
+        <TimeSlider
+          commits={timeline}
+          currentIndex={commitIndex}
+          onIndexChange={handleCommitChange}
+          theme={theme}
+        />
+      )}
+
       {/* Split view: graph + detail panel */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
         {/* Graph canvas — fills remaining space */}
-        <div className="relative min-h-0" style={{ flex: '1 1 0%', minWidth: 0 }}>
+        <div style={{ flex: '1 1 0%', position: 'relative', minHeight: 0, minWidth: 0 }}>
           {loading && (
             <div className="absolute inset-0 flex items-center justify-center z-10"
                  style={{ backgroundColor: theme.bg }}>
@@ -571,7 +950,7 @@ export default function GraphView() {
               <p className="text-red-400">{error}</p>
             </div>
           )}
-          <div ref={containerRef} className="absolute inset-0" />
+          <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
 
           {/* Legend */}
           <div className="absolute bottom-3 left-3 flex gap-3 text-xs px-3 py-2 rounded-lg"
@@ -602,6 +981,41 @@ export default function GraphView() {
           }}
         >
           <div className="w-80 flex flex-col h-full">
+            {/* Contributors section (collapsible, shown when active) */}
+            {showContributors && contributors && (
+              <>
+                <div className="px-4 py-2.5 text-sm font-medium shrink-0"
+                     style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}`, color: theme.textSecondary }}>
+                  Contributors
+                </div>
+                <div className="overflow-y-auto shrink-0" style={{ maxHeight: '40%' }}>
+                  <div className="p-3 space-y-1">
+                    {Object.entries(contributors).map(([email, info]) => (
+                      <button
+                        key={email}
+                        onClick={() => highlightContributor(info.files)}
+                        className="w-full text-left px-3 py-2 rounded text-sm transition hover:opacity-80"
+                        style={{ backgroundColor: theme.badgeBg }}
+                      >
+                        <div className="font-medium" style={{ color: theme.textPrimary }}>{info.name}</div>
+                        <div className="text-xs" style={{ color: theme.textMuted }}>
+                          {info.commit_count} commits &middot; {info.files.length} files
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => cyRef.current?.elements().removeClass('dimmed highlighted')}
+                      className="w-full text-center px-3 py-1.5 rounded text-xs mt-2"
+                      style={{ backgroundColor: theme.btnBg, color: theme.btnText }}
+                    >
+                      Clear highlight
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Details section (always visible) */}
             <div className="px-4 py-2.5 text-sm font-medium shrink-0"
                  style={{ borderBottom: `1px solid ${theme.panelHeaderBorder}`, color: theme.textSecondary }}>
               Details

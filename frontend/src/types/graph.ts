@@ -54,3 +54,58 @@ export interface SearchResult {
   elements: GraphElements
   total_matches: number
 }
+
+// --- History types ---
+
+export interface CommitInfo {
+  sha: string
+  short_sha: string
+  message: string
+  author_name: string
+  author_email: string
+  timestamp: number
+  files_changed: string[]
+}
+
+export interface HistoryTimeline {
+  project_id: string
+  commits: CommitInfo[]
+  total_commits: number
+  sampled_commits: number
+}
+
+export interface GraphDelta {
+  added_nodes: string[]
+  removed_nodes: string[]
+  modified_nodes: string[]
+}
+
+export interface GraphAtCommit {
+  project_id: string
+  commit_sha: string
+  elements: GraphElements
+  delta: GraphDelta | null
+}
+
+export interface ChurnEntry {
+  path: string
+  additions: number
+  deletions: number
+  commit_sha: string
+}
+
+export interface ChurnData {
+  project_id: string
+  churn: Record<string, ChurnEntry[]>
+}
+
+export interface ContributorInfo {
+  name: string
+  files: string[]
+  commit_count: number
+}
+
+export interface ContributorData {
+  project_id: string
+  contributors: Record<string, ContributorInfo>
+}

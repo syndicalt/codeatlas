@@ -33,7 +33,47 @@ class ParsedFile:
 
 
 @dataclass
+class CommitInfo:
+    sha: str
+    short_sha: str
+    message: str
+    author_name: str
+    author_email: str
+    timestamp: int  # unix epoch
+    files_changed: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ChurnMetric:
+    path: str
+    additions: int
+    deletions: int
+    commit_sha: str
+
+
+@dataclass
+class GraphDelta:
+    commit_sha: str
+    added_nodes: list[str] = field(default_factory=list)
+    removed_nodes: list[str] = field(default_factory=list)
+    modified_nodes: list[str] = field(default_factory=list)
+    added_edges: list[tuple[str, str]] = field(default_factory=list)
+    removed_edges: list[tuple[str, str]] = field(default_factory=list)
+
+
+@dataclass
+class HistoryData:
+    commits: list[CommitInfo] = field(default_factory=list)
+    churn: dict = field(default_factory=dict)  # path -> list[ChurnMetric]
+    contributors: dict = field(default_factory=dict)  # email -> {name, files, commit_count}
+    deltas: list[GraphDelta] = field(default_factory=list)
+    snapshots: dict = field(default_factory=dict)  # sha -> cytoscape_json
+    baseline_sha: str = ""
+
+
+@dataclass
 class ProjectData:
     """Holds both the NetworkX graph and the Cytoscape JSON for a project."""
     cytoscape_json: dict
     graph: object  # nx.DiGraph — typed as object to avoid circular import
+    history: HistoryData | None = None

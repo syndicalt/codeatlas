@@ -1,9 +1,10 @@
+import tempfile
 from pathlib import Path
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    upload_dir: Path = Path("tmp/uploads")
+    upload_dir: Path = Path(tempfile.gettempdir()) / "codeatlas_uploads"
     max_upload_size_mb: int = 500
     max_file_count: int = 2000
     allowed_extensions: set[str] = {".py", ".js", ".ts", ".tsx", ".jsx", ".java"}

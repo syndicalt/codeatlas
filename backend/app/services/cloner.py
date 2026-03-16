@@ -20,10 +20,12 @@ def validate_github_url(url: str) -> str:
     return url
 
 
-def clone_repo(url: str, dest: Path, branch: str | None = None) -> Path:
+def clone_repo(url: str, dest: Path, branch: str | None = None, shallow: bool = True) -> Path:
     url = validate_github_url(url)
     clone_url = url + ".git"
-    kwargs: dict = {"depth": 1}
+    kwargs: dict = {}
+    if shallow:
+        kwargs["depth"] = 1
     if branch:
         kwargs["branch"] = branch
     git.Repo.clone_from(clone_url, str(dest), **kwargs)

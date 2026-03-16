@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class IngestGitHubRequest(BaseModel):
     url: str
     branch: str | None = None
+    analyze_history: bool = False
 
 
 class IngestResponse(BaseModel):
@@ -61,3 +62,66 @@ class ExportFormat(str, Enum):
 class CallChainDirection(str, Enum):
     callers = "callers"
     callees = "callees"
+
+
+# --- History schemas ---
+
+class CommitInfoSchema(BaseModel):
+    sha: str
+    short_sha: str
+    message: str
+    author_name: str
+    author_email: str
+    timestamp: int
+    files_changed: list[str] = []
+
+
+class HistoryTimelineResponse(BaseModel):
+    project_id: str
+    commits: list[CommitInfoSchema]
+    total_commits: int
+    sampled_commits: int
+
+
+class GraphDeltaSchema(BaseModel):
+    added_nodes: list[str] = []
+    removed_nodes: list[str] = []
+    modified_nodes: list[str] = []
+
+
+class GraphAtCommitResponse(BaseModel):
+    project_id: str
+    commit_sha: str
+    elements: dict
+    delta: GraphDeltaSchema | None = None
+
+
+class ChurnEntrySchema(BaseModel):
+    path: str
+    additions: int
+    deletions: int
+    commit_sha: str
+
+
+class ChurnResponse(BaseModel):
+    project_id: str
+    churn: dict  # path -> list[ChurnEntrySchema]
+
+
+class ContributorSchema(BaseModel):
+    name: str
+    files: list[str]
+    commit_count: int
+
+
+class ContributorResponse(BaseModel):
+    project_id: str
+    contributors: dict  # email -> ContributorSchema
+
+
+class DiffResponse(BaseModel):
+    project_id: str
+    from_sha: str
+    to_sha: str
+    delta: GraphDeltaSchema
+    elements: dict

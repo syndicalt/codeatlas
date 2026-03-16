@@ -1,11 +1,14 @@
+import json
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, UploadFile
 
 from app.config import settings
 from app.models.schemas import IngestGitHubRequest, IngestResponse, TaskStatusResponse
 from app.services.cloner import clone_repo, extract_zip
-from app.services.graph_builder import build_graph, graph_to_cytoscape_json, project_store
+from app.services.graph_builder import (
+    build_graph, cytoscape_json_to_graph, graph_to_cytoscape_json, project_store,
+)
 from app.services.models import ProjectData
 from app.services.parser import parse_project
 from app.services.task_manager import (
@@ -15,7 +18,7 @@ from app.services.task_manager import (
 router = APIRouter()
 
 
-def _process_in_background(project_id: str, root):
+def _process_in_background(project_id: str, root, analyze_history: bool = False):
     """Run parsing and graph building, updating task status along the way."""
     try:
         update_task(project_id, TaskStatus.processing, progress=10)
@@ -25,10 +28,25 @@ def _process_in_background(project_id: str, root):
             update_task(project_id, TaskStatus.error, error_message="No supported source files found")
             return
 
-        update_task(project_id, TaskStatus.processing, progress=50)
+        update_task(project_id, TaskStatus.processing, progress=40)
         graph = build_graph(parsed_files)
         cytoscape_json = graph_to_cytoscape_json(graph)
-        project_store[project_id] = ProjectData(cytoscape_json=cytoscape_json, graph=graph)
+
+        history = None
+        if analyze_history:
+            update_task(project_id, TaskStatus.processing, progress=50)
+            from app.services.history_analyzer import analyze_history as run_history
+
+            def progress_cb(pct: int):
+                # Map 0-100 history progress to 50-95 overall progress
+                overall = 50 + int(pct * 0.45)
+                update_task(project_id, TaskStatus.processing, progress=overall)
+
+            history = run_history(root, progress_cb=progress_cb)
+
+        project_store[project_id] = ProjectData(
+            cytoscape_json=cytoscape_json, graph=graph, history=history,
+        )
 
         update_task(project_id, TaskStatus.ready, progress=100)
     except Exception as e:
@@ -41,14 +59,17 @@ async def ingest_github(request: IngestGitHubRequest, background_tasks: Backgrou
     dest = settings.upload_dir / project_id
 
     try:
-        clone_repo(request.url, dest, request.branch)
+        shallow = not request.analyze_history
+        clone_repo(request.url, dest, request.branch, shallow=shallow)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Clone failed: {e}")
 
     create_task(project_id)
-    background_tasks.add_task(_process_in_background, project_id, dest)
+    background_tasks.add_task(
+        _process_in_background, project_id, dest, analyze_history=request.analyze_history,
+    )
 
     return IngestResponse(project_id=project_id, status="processing")
 
@@ -116,3 +137,38 @@ async def ingest_demo(background_tasks: BackgroundTasks):
     background_tasks.add_task(_process_in_background, project_id, dest)
 
     return IngestResponse(project_id=project_id, status="processing")
+
+
+@router.post("/import", response_model=IngestResponse)
+async def ingest_import(file: UploadFile):
+    """Import a previously exported CodeAtlas JSON file to rebuild the graph."""
+    if not file.filename or not file.filename.endswith(".json"):
+        raise HTTPException(status_code=400, detail="Only .json files are accepted")
+
+    try:
+        content = await file.read()
+        data = json.loads(content)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid JSON file")
+
+    elements = data.get("elements")
+    if not elements or "nodes" not in elements or "edges" not in elements:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid CodeAtlas JSON: missing elements.nodes or elements.edges",
+        )
+
+    project_id = data.get("project_id") or str(uuid.uuid4())
+    # Avoid collisions with existing projects
+    if project_id in project_store:
+        project_id = str(uuid.uuid4())
+
+    graph = cytoscape_json_to_graph(elements)
+    project_store[project_id] = ProjectData(cytoscape_json=elements, graph=graph)
+
+    return IngestResponse(
+        project_id=project_id,
+        status="ready",
+        node_count=len(elements["nodes"]),
+        edge_count=len(elements["edges"]),
+    )

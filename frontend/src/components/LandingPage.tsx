@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ingestGitHub, ingestUpload, ingestDemo } from '../api/client'
+import { ingestGitHub, ingestUpload, ingestDemo, ingestImportJSON } from '../api/client'
 import { useTaskPolling } from '../hooks/useTaskPolling'
 
 export default function LandingPage() {
@@ -10,6 +10,7 @@ export default function LandingPage() {
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [analyzeHistory, setAnalyzeHistory] = useState(false)
 
   const task = useTaskPolling(pendingId)
 
@@ -42,12 +43,17 @@ export default function LandingPage() {
 
   const handleGitHub = () => {
     if (!url.trim()) return
-    startIngest(() => ingestGitHub(url.trim()))
+    startIngest(() => ingestGitHub(url.trim(), undefined, analyzeHistory))
   }
 
   const handleFile = useCallback((file: File) => {
+    if (file.name.endsWith('.json')) {
+      // Import a previously exported CodeAtlas JSON
+      startIngest(() => ingestImportJSON(file))
+      return
+    }
     if (!file.name.endsWith('.zip')) {
-      setError('Only .zip files are accepted')
+      setError('Only .zip or .json files are accepted')
       return
     }
     startIngest(() => ingestUpload(file))
@@ -94,6 +100,18 @@ export default function LandingPage() {
           </button>
         </div>
 
+        {/* History option */}
+        <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={analyzeHistory}
+            onChange={(e) => setAnalyzeHistory(e.target.checked)}
+            disabled={loading}
+            className="rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500"
+          />
+          Analyze full Git history (slower, enables time slider &amp; contributor views)
+        </label>
+
         <div className="flex items-center gap-4 text-slate-500">
           <div className="flex-1 h-px bg-slate-700" />
           <span>or</span>
@@ -109,7 +127,7 @@ export default function LandingPage() {
             if (loading) return
             const input = document.createElement('input')
             input.type = 'file'
-            input.accept = '.zip'
+            input.accept = '.zip,.json'
             input.onchange = () => {
               if (input.files?.[0]) handleFile(input.files[0])
             }
@@ -122,7 +140,7 @@ export default function LandingPage() {
             }`}
         >
           <p className="text-slate-300 text-lg">
-            Drop a .zip file here or click to browse
+            Drop a .zip or exported .json file here, or click to browse
           </p>
         </div>
 

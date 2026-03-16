@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import graph, ingest
+from app.routers import graph, history, ingest
 
 
 @asynccontextmanager
@@ -28,6 +28,7 @@ app.add_middleware(
 
 app.include_router(ingest.router, prefix="/api/ingest", tags=["ingest"])
 app.include_router(graph.router, prefix="/api/graph", tags=["graph"])
+app.include_router(history.router, prefix="/api/history", tags=["history"])
 
 
 @app.get("/health")

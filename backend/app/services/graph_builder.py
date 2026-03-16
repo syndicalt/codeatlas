@@ -169,3 +169,26 @@ def graph_to_cytoscape_json(G: nx.DiGraph) -> dict:
         })
 
     return {"nodes": nodes, "edges": edges}
+
+
+def cytoscape_json_to_graph(cyto_json: dict) -> nx.DiGraph:
+    """Rebuild a NetworkX DiGraph from Cytoscape.js JSON elements."""
+    G = nx.DiGraph()
+    for node in cyto_json.get("nodes", []):
+        d = node["data"]
+        G.add_node(
+            d["id"],
+            label=d.get("label", d["id"]),
+            type=d.get("type", "unknown"),
+            file=d.get("file", ""),
+            line=d.get("line", 0),
+            directory=d.get("directory", ""),
+        )
+    for edge in cyto_json.get("edges", []):
+        d = edge["data"]
+        G.add_edge(
+            d["source"],
+            d["target"],
+            relationship=d.get("relationship", ""),
+        )
+    return G
