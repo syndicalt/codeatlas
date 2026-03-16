@@ -52,27 +52,38 @@ CodeAtlas is being developed in five phases. Each phase builds on the previous o
 **Status: Complete**
 
 - [x] Vector embeddings of graph data and commit messages (FAISS + sentence-transformers)
-- [x] LLM-powered query agent for natural language questions (Anthropic Claude API with tool-use)
+- [x] Tool-augmented LLM agent with agentic loop (search, inspect, trace calls, query history)
+- [x] Multi-provider LLM support (Anthropic, OpenAI, Google Gemini, xAI Grok, Ollama)
 - [x] Chat-like query interface in the dashboard (tabbed panel with Details/Ask AI)
 - [x] Response types: text explanations, highlighted subgraphs, code snippets
-- [x] Query examples: "Why was this module refactored?", "Show all callers of function X"
-- [x] Guardrails for ambiguous queries (confidence scoring, local-only fallback)
+- [x] Confidence scoring, follow-up suggestions, and local-only fallback mode
 - [x] Conversation memory with bounded history
-- [x] Local-only mode when no API key is set (vector search fallback)
+- [x] Provider-agnostic tool format conversion (Anthropic-style canonical → OpenAI/Gemini native)
 
-## Phase 5: Polish & Extensibility
+## Phase 5: Polish & Extensibility :white_check_mark:
 
-**Focus:** Production readiness
+**Status: Complete**
 
-- [ ] Plugin system for custom language parsers
-- [ ] OAuth authentication for private GitHub repos
-- [ ] Real-time collaboration via WebSockets
-- [ ] Shareable graph links
-- [ ] Docker containerization (docker-compose)
-- [ ] Cloud deployment (Vercel + AWS/Heroku)
+- [x] OAuth authentication (GitHub + Google) with JWT tokens
+- [x] User API key management — encrypted storage per provider (Fernet)
+- [x] User model preferences — choose preferred LLM provider and model
+- [x] Atlas history tracking — previously generated graphs per user
+- [x] Plugin system for custom language parsers
+- [x] Real-time collaboration via WebSockets (presence indicators)
+- [x] Shareable graph links
+- [x] Docker containerization (multi-stage single-container build)
+- [x] Cloud deployment support (Railway, Fly.io)
+- [x] API rate limiting (SlowAPI middleware)
+- [x] 5 color themes (Dark, Light, Neon, Sunset, High Contrast)
+- [x] Resizable sidebar panel with drag handle
+- [x] Professional graph styling — connection-based node sizing, directory clustering, refined edge rendering
+- [x] Adaptive fCoSE layout tuned to graph size (small/medium/large)
+- [x] Graph legend with node types and edge types
+- [x] Neo4j integration for persistent graph storage (optional)
+
+### Remaining
+
 - [ ] Comprehensive frontend testing (Jest + React Testing Library)
 - [ ] End-to-end tests (Cypress)
-- [ ] Accessibility: keyboard navigation, ARIA labels, high-contrast mode
-- [ ] Performance optimization for graphs with 10,000+ nodes
-- [ ] API rate limiting
-- [ ] Neo4j integration for persistent graph storage
+- [ ] Full accessibility audit (keyboard navigation, screen reader support)
+- [ ] Performance profiling for graphs with 10,000+ nodes

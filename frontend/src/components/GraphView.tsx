@@ -142,55 +142,82 @@ const THEME_KEYS = Object.keys(THEMES)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildCytoStyle(t: Theme): any[] {
   return [
+    // --- Compound / directory group nodes ---
     {
-      selector: 'node',
+      selector: 'node.group',
+      style: {
+        'background-color': t.panelBg,
+        'background-opacity': 0.35,
+        'border-width': 1,
+        'border-color': t.panelBorder,
+        'border-opacity': 0.5,
+        'border-style': 'solid',
+        shape: 'round-rectangle',
+        'corner-radius': 8,
+        label: 'data(label)',
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'text-margin-y': 10,
+        'font-size': '11px',
+        'font-weight': 'bold' as any,
+        'font-family': 'Inter, system-ui, -apple-system, sans-serif',
+        color: t.textMuted,
+        'text-outline-color': t.bg,
+        'text-outline-width': 2,
+        'padding': '24px',
+        'min-width': 60,
+        'min-height': 40,
+      } as any,
+    },
+    // --- Base node style ---
+    {
+      selector: 'node[type]',
       style: {
         label: 'data(label)',
         'text-valign': 'center',
         'text-halign': 'center',
-        'font-size': '10px',
-        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        'font-size': '9px',
+        'font-family': 'Inter, system-ui, -apple-system, sans-serif',
         color: t.nodeLabel,
-        'text-outline-color': t.nodeOutline,
-        'text-outline-width': 1.5,
-        // Auto-size to fit label
-        width: 'label',
-        height: 'label',
-        'padding-top': '8px',
-        'padding-bottom': '8px',
-        'padding-left': '12px',
-        'padding-right': '12px',
-        // Subtle glow
-        'background-opacity': 0.9,
-        'border-width': 1.5,
-        'border-opacity': 0.4,
-        'border-color': t.edgeDefault,
+        'text-outline-color': t.bg,
+        'text-outline-width': 2,
+        'text-max-width': '90px',
+        'text-wrap': 'ellipsis',
+        width: 'mapData(connections, 0, 20, 28, 64)',
+        height: 'mapData(connections, 0, 20, 28, 64)',
+        'background-opacity': 0.85,
+        'border-width': 2,
+        'border-opacity': 0.6,
         // Smooth transitions
         'transition-property': 'background-color, border-color, border-width, opacity, width, height',
         'transition-duration': '300ms',
         'transition-timing-function': 'ease-in-out-sine',
       } as any,
     },
+    // --- Node types ---
     {
       selector: 'node.module',
       style: {
         'background-color': t.module,
         shape: 'round-rectangle',
         'border-color': t.module,
-        'font-size': '11px',
-        'font-weight': 'bold' as any,
+        'corner-radius': 4,
+        'font-size': '10px',
+        'font-weight': '600' as any,
+        width: 'mapData(connections, 0, 20, 36, 72)',
+        height: 'mapData(connections, 0, 20, 28, 48)',
+        'text-max-width': '100px',
       } as any,
     },
     {
       selector: 'node.class',
       style: {
         'background-color': t.class,
-        shape: 'diamond',
+        shape: 'round-rectangle',
         'border-color': t.class,
-        'padding-top': '14px',
-        'padding-bottom': '14px',
-        'padding-left': '18px',
-        'padding-right': '18px',
+        'corner-radius': 12,
+        'font-size': '9px',
+        'font-weight': '500' as any,
       } as any,
     },
     {
@@ -199,6 +226,9 @@ function buildCytoStyle(t: Theme): any[] {
         'background-color': t.function,
         shape: 'ellipse',
         'border-color': t.function,
+        'font-size': '8px',
+        'background-opacity': 0.75,
+        'border-opacity': 0.4,
       } as any,
     },
     {
@@ -206,19 +236,28 @@ function buildCytoStyle(t: Theme): any[] {
       style: {
         'background-color': t.external,
         shape: 'round-rectangle',
+        'corner-radius': 4,
         'border-style': 'dashed',
-        'border-width': 2,
+        'border-width': 1.5,
         'border-color': t.externalBorder,
-        'border-opacity': 0.8,
-        'background-opacity': 0.6,
+        'border-opacity': 0.5,
+        'background-opacity': 0.4,
+        'font-size': '8px',
         'font-style': 'italic' as any,
+        color: t.textMuted,
+        width: 'mapData(connections, 0, 20, 24, 48)',
+        height: 'mapData(connections, 0, 20, 24, 48)',
       } as any,
     },
+    // --- Interaction states ---
     {
       selector: 'node:active',
-      style: { 'overlay-color': t.highlight, 'overlay-opacity': 0.15 },
+      style: { 'overlay-color': t.highlight, 'overlay-opacity': 0.1 },
     },
-    { selector: 'node.dimmed', style: { opacity: 0.15, 'transition-duration': '400ms' } as any },
+    {
+      selector: 'node.dimmed',
+      style: { opacity: 0.1, 'transition-duration': '400ms' } as any,
+    },
     {
       selector: 'node.highlighted',
       style: {
@@ -227,6 +266,7 @@ function buildCytoStyle(t: Theme): any[] {
         'border-opacity': 1,
         'background-opacity': 1,
         'z-index': 10,
+        'font-size': '11px',
       } as any,
     },
     {
@@ -239,7 +279,7 @@ function buildCytoStyle(t: Theme): any[] {
     {
       selector: 'node.removed',
       style: {
-        opacity: 0.25, 'border-width': 3, 'border-color': '#ef4444', 'border-style': 'dashed',
+        opacity: 0.2, 'border-width': 2, 'border-color': '#ef4444', 'border-style': 'dashed',
       } as any,
     },
     {
@@ -249,48 +289,74 @@ function buildCytoStyle(t: Theme): any[] {
         'background-opacity': 1,
       } as any,
     },
+    // --- Edges ---
     {
       selector: 'edge',
       style: {
-        width: 1.2,
+        width: 0.8,
         'line-color': t.edgeDefault,
         'target-arrow-color': t.edgeDefault,
-        'target-arrow-shape': 'triangle',
-        'curve-style': 'bezier',
-        'arrow-scale': 0.7,
-        opacity: 0.7,
+        'target-arrow-shape': 'triangle-backcurve',
+        'arrow-scale': 0.5,
+        'curve-style': 'unbundled-bezier',
+        'control-point-distances': [20],
+        'control-point-weights': [0.5],
+        opacity: 0.35,
         'transition-property': 'opacity, line-color, width',
         'transition-duration': '300ms',
       } as any,
     },
     {
+      selector: 'edge[relationship = "contains"]',
+      style: {
+        'line-color': t.edgeDefault,
+        'target-arrow-color': t.edgeDefault,
+        'target-arrow-shape': 'none',
+        'line-style': 'solid',
+        width: 0.5,
+        opacity: 0.15,
+        'curve-style': 'straight',
+      },
+    },
+    {
       selector: 'edge[relationship = "imports"]',
-      style: { 'line-color': t.imports, 'target-arrow-color': t.imports, 'line-style': 'dashed', opacity: 0.6 },
+      style: {
+        'line-color': t.imports,
+        'target-arrow-color': t.imports,
+        'line-style': 'dashed',
+        'line-dash-pattern': [6, 4],
+        width: 1,
+        opacity: 0.4,
+      },
     },
     {
       selector: 'edge[relationship = "inherits"]',
-      style: { 'line-color': t.inherits, 'target-arrow-color': t.inherits, width: 2, opacity: 0.8 },
+      style: {
+        'line-color': t.inherits,
+        'target-arrow-color': t.inherits,
+        'target-arrow-shape': 'triangle',
+        width: 1.5,
+        opacity: 0.6,
+      },
     },
     {
       selector: 'edge[relationship = "calls"]',
-      style: { 'line-color': t.calls, 'target-arrow-color': t.calls, 'line-style': 'dotted', opacity: 0.5 },
+      style: {
+        'line-color': t.calls,
+        'target-arrow-color': t.calls,
+        'line-style': 'dotted',
+        'line-dash-pattern': [2, 3],
+        width: 0.7,
+        opacity: 0.25,
+      },
     },
-    { selector: 'edge.dimmed', style: { opacity: 0.06 } },
+    { selector: 'edge.dimmed', style: { opacity: 0.03 } },
+    // --- Hover/selected edge emphasis ---
+    {
+      selector: 'node.highlighted ~ edge, edge.highlighted',
+      style: { opacity: 0.8, width: 1.5 } as any,
+    },
   ]
-}
-
-const LAYOUT_OPTIONS = {
-  name: 'cose',
-  animate: true,
-  animationDuration: 800,
-  animationEasing: 'ease-out-cubic' as const,
-  nodeDimensionsIncludeLabels: true,
-  idealEdgeLength: () => 140,
-  nodeRepulsion: () => 12000,
-  gravity: 0.3,
-  numIter: 300,
-  fit: true,
-  padding: 40,
 }
 
 const LARGE_GRAPH_THRESHOLD = 2000
@@ -303,16 +369,43 @@ function getLayoutOptions(nodeCount: number, animated = true) {
       animate: false,
       quality: 'default' as const,
       nodeDimensionsIncludeLabels: true,
-      idealEdgeLength: 120,
-      nodeRepulsion: 8000,
-      gravity: 0.4,
-      numIter: 2500,
+      idealEdgeLength: 100,
+      nodeRepulsion: 6000,
+      edgeElasticity: 0.2,
+      gravity: 0.5,
+      gravityRange: 2.0,
+      numIter: 3000,
       fit: true,
-      padding: 30,
+      padding: 50,
       randomize: true,
+      packComponents: true,
     }
   }
-  return { ...LAYOUT_OPTIONS, animate: animated, animationDuration: animated ? 800 : 0 }
+  // Use fcose for all graphs — it supports compound nodes and produces cleaner layouts
+  return {
+    name: 'fcose',
+    animate: animated,
+    animationDuration: animated ? 900 : 0,
+    animationEasing: 'ease-out-cubic' as const,
+    quality: 'proof' as const,
+    nodeDimensionsIncludeLabels: true,
+    idealEdgeLength: nodeCount < 50 ? 160 : nodeCount < 200 ? 120 : 90,
+    nodeRepulsion: nodeCount < 50 ? 15000 : nodeCount < 200 ? 10000 : 6000,
+    edgeElasticity: 0.3,
+    gravity: 0.25,
+    gravityRange: 3.8,
+    gravityCompound: 1.5,
+    gravityRangeCompound: 2.0,
+    numIter: 2500,
+    fit: true,
+    padding: 60,
+    randomize: false,
+    packComponents: true,
+    nestingFactor: 0.15,
+    tile: true,
+    tilingPaddingVertical: 16,
+    tilingPaddingHorizontal: 16,
+  }
 }
 
 /** Create a Cytoscape instance with animated entry */
@@ -344,17 +437,16 @@ function createCy(
   // Fade-in: start transparent and animate to full opacity
   if (animated) {
     cy.elements().style('opacity', 0)
-    ;(cy as any).animate({ style: {}, duration: 0 }) // force a frame
-    let frame = 0
-    const fadeIn = () => {
-      frame++
-      const progress = Math.min(frame / 20, 1) // ~20 frames ≈ 330ms at 60fps
+    const startTime = performance.now()
+    const duration = 500 // ms
+    const fadeIn = (now: number) => {
+      const progress = Math.min((now - startTime) / duration, 1)
       const ease = 1 - Math.pow(1 - progress, 3) // ease-out cubic
       cy.elements().style('opacity', ease)
       if (progress < 1) requestAnimationFrame(fadeIn)
     }
     // Start fade after layout begins positioning
-    setTimeout(() => requestAnimationFrame(fadeIn), 200)
+    setTimeout(() => requestAnimationFrame(fadeIn), 300)
   }
 
   cy.on('tap', 'node', (ev) => onTapNode(ev.target.data()))
@@ -418,8 +510,9 @@ function morphGraph(
   }
 
   // Re-run layout with animation
+  const morphLayout = getLayoutOptions(cy.nodes().length, true)
   cy.layout({
-    ...LAYOUT_OPTIONS,
+    ...morphLayout,
     animate: true,
     animationDuration: 600,
     fit: true,
@@ -1193,20 +1286,33 @@ export default function GraphView() {
           </div>
 
           {/* Legend */}
-          <div className="absolute bottom-3 left-3 flex gap-3 text-xs px-3 py-2 rounded-lg" role="legend" aria-label="Graph node types"
-               style={{ backgroundColor: theme.legendBg, color: theme.textSecondary }}>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.module }} /> Module
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.class }} /> Class
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.function }} /> Function
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.external }} /> External
-            </span>
+          <div className="absolute bottom-3 left-3 flex flex-col gap-1.5 text-[10px] px-3 py-2.5 rounded-lg backdrop-blur-sm" role="legend" aria-label="Graph legend"
+               style={{ backgroundColor: theme.legendBg, color: theme.textSecondary, border: `1px solid ${theme.panelBorder}` }}>
+            <div className="flex gap-3">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: theme.module }} /> Module
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: theme.class }} /> Class
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.function }} /> Function
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm opacity-60" style={{ backgroundColor: theme.external, border: `1px dashed ${theme.externalBorder}` }} /> External
+              </span>
+            </div>
+            <div className="flex gap-3" style={{ color: theme.textMuted }}>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 border-t border-dashed" style={{ borderColor: theme.imports }} /> imports
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 border-t-2" style={{ borderColor: theme.inherits }} /> inherits
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 border-t border-dotted" style={{ borderColor: theme.calls }} /> calls
+              </span>
+            </div>
           </div>
         </div>
 

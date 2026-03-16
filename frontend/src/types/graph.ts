@@ -3,10 +3,11 @@ export interface GraphNode {
     id: string
     label: string
     type: string
-    file: string
-    line: number
-    directory: string
-    connections: number
+    file?: string
+    line?: number
+    directory?: string
+    connections?: number
+    parent?: string
   }
   classes: string
 }

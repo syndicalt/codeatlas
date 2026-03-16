@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+backend/tmp/
+
+# Node
+node_modules/
+frontend/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+backend/.env
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+
+# Claude
+CLAUDE.md
+.claude/

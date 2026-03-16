@@ -271,3 +271,144 @@ Export the graph data.
 JSON export returns the graph as a downloadable file. PNG and SVG export are handled client-side via the Cytoscape.js API.
 
 **Response:** JSON file download with `Content-Disposition` header
+
+---
+
+## RAG (AI Chat)
+
+### `POST /api/rag/{project_id}/query`
+
+Ask a natural language question about the codebase. Requires an API key (user-provided or server-level).
+
+**Request Body:**
+
+```json
+{
+  "message": "Which functions have the most connections?",
+  "conversation_id": null
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string | Yes | Natural language question |
+| `conversation_id` | string | No | Continue an existing conversation |
+
+**Response:** `200 OK`
+
+```json
+{
+  "project_id": "...",
+  "message_id": "",
+  "conversation_id": "a1b2c3d4-...",
+  "text": "The most connected functions are...",
+  "highlighted_nodes": ["func:src/main.py:run", "func:src/utils.py:parse"],
+  "subgraph_elements": null,
+  "code_snippets": [{"file": "src/main.py", "start_line": 10, "end_line": 20, "label": "run"}],
+  "confidence": "high",
+  "follow_up_suggestions": ["Show me the call chain for this function"],
+  "is_local_only": false
+}
+```
+
+---
+
+### `GET /api/rag/{project_id}/index-status`
+
+Check whether the vector index has been built for a project.
+
+---
+
+### `POST /api/rag/{project_id}/build-index`
+
+Manually trigger vector index build.
+
+---
+
+## History
+
+### `GET /api/history/{project_id}/timeline`
+
+Get the commit timeline for a project (requires history analysis during ingestion).
+
+### `GET /api/history/{project_id}/at/{commit_sha}`
+
+Get the graph state at a specific commit, with a delta showing added/removed/modified nodes.
+
+### `GET /api/history/{project_id}/diff`
+
+Get a diff between two commits. Query params: `from_sha`, `to_sha`.
+
+### `GET /api/history/{project_id}/churn`
+
+Get file churn metrics (additions/deletions per file over time).
+
+### `GET /api/history/{project_id}/contributors`
+
+Get contributor data (who works on which files).
+
+---
+
+## Authentication
+
+### `GET /api/auth/github`
+
+Returns the GitHub OAuth authorization URL. Redirect the user to this URL.
+
+### `GET /api/auth/github/callback?code=...`
+
+Exchange the GitHub OAuth code for a JWT token.
+
+### `GET /api/auth/google`
+
+Returns the Google OAuth authorization URL.
+
+### `GET /api/auth/google/callback?code=...`
+
+Exchange the Google OAuth code for a JWT token.
+
+### `GET /api/auth/me`
+
+Get the current user's profile. Requires `Authorization: Bearer <token>` header.
+
+---
+
+## User Management
+
+All endpoints require authentication (`Authorization: Bearer <token>`).
+
+### `GET /api/user/api-keys`
+
+List stored API keys (provider names and creation dates only — keys are never returned).
+
+### `PUT /api/user/api-keys/{provider}`
+
+Store or update an API key for a provider (`anthropic`, `openai`, `google`, `xai`, `ollama`).
+
+### `DELETE /api/user/api-keys/{provider}`
+
+Remove a stored API key.
+
+### `PUT /api/user/preferences`
+
+Update preferred LLM provider and model.
+
+### `GET /api/user/atlas-history`
+
+List previously generated atlases.
+
+### `DELETE /api/user/atlas-history/{entry_id}`
+
+Delete an atlas history entry.
+
+---
+
+## Sharing
+
+### `POST /api/share/{project_id}`
+
+Create a shareable link for a graph.
+
+### `GET /api/share/{share_id}`
+
+Fetch a shared graph by its share ID

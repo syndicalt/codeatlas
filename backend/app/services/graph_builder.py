@@ -141,18 +141,45 @@ def graph_to_cytoscape_json(G: nx.DiGraph) -> dict:
     for node_id in G.nodes:
         connection_count[node_id] = G.in_degree(node_id) + G.out_degree(node_id)
 
+    # Collect unique directories for compound grouping
+    directories: set[str] = set()
+    for _, attrs in G.nodes(data=True):
+        d = attrs.get("directory", "")
+        if d:
+            directories.add(d)
+
+    # Create compound parent nodes for directories (only if there are multiple)
     nodes = []
+    if len(directories) > 1:
+        for d in sorted(directories):
+            dir_id = f"dir:{d}"
+            label = PurePosixPath(d).name or d
+            nodes.append({
+                "data": {
+                    "id": dir_id,
+                    "label": label,
+                    "type": "group",
+                },
+                "classes": "group",
+            })
+
     for node_id, attrs in G.nodes(data=True):
+        node_data: dict = {
+            "id": node_id,
+            "label": attrs.get("label", node_id),
+            "type": attrs.get("type", "unknown"),
+            "file": attrs.get("file", ""),
+            "line": attrs.get("line", 0),
+            "directory": attrs.get("directory", ""),
+            "connections": connection_count.get(node_id, 0),
+        }
+        # Assign parent for directory grouping (modules go into their directory group)
+        d = attrs.get("directory", "")
+        if len(directories) > 1 and d and attrs.get("type") == "module":
+            node_data["parent"] = f"dir:{d}"
+
         nodes.append({
-            "data": {
-                "id": node_id,
-                "label": attrs.get("label", node_id),
-                "type": attrs.get("type", "unknown"),
-                "file": attrs.get("file", ""),
-                "line": attrs.get("line", 0),
-                "directory": attrs.get("directory", ""),
-                "connections": connection_count.get(node_id, 0),
-            },
+            "data": node_data,
             "classes": attrs.get("type", "unknown"),
         })
 
@@ -176,6 +203,9 @@ def cytoscape_json_to_graph(cyto_json: dict) -> nx.DiGraph:
     G = nx.DiGraph()
     for node in cyto_json.get("nodes", []):
         d = node["data"]
+        # Skip compound group nodes — they're only for frontend layout
+        if d.get("type") == "group":
+            continue
         G.add_node(
             d["id"],
             label=d.get("label", d["id"]),
