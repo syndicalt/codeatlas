@@ -92,9 +92,9 @@ def _record_history(
 @router.post("/github", response_model=IngestResponse)
 @limiter.limit(settings.rate_limit_ingest)
 async def ingest_github(
-    request: IngestGitHubRequest,
+    body: IngestGitHubRequest,
     background_tasks: BackgroundTasks,
-    http_request: Request,
+    request: Request,
     user: dict | None = Depends(get_current_user),
 ):
     project_id = str(uuid.uuid4())
@@ -112,8 +112,8 @@ async def ingest_github(
                 pass
 
     try:
-        shallow = not request.analyze_history
-        clone_repo(request.url, dest, request.branch, shallow=shallow, access_token=access_token)
+        shallow = not body.analyze_history
+        clone_repo(body.url, dest, body.branch, shallow=shallow, access_token=access_token)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -122,11 +122,11 @@ async def ingest_github(
     create_task(project_id)
     user_id = user["id"] if user else None
     # Extract repo name from URL for display
-    repo_name = request.url.rstrip("/").split("/")[-1].removesuffix(".git")
+    repo_name = body.url.rstrip("/").split("/")[-1].removesuffix(".git")
     background_tasks.add_task(
         _process_in_background, project_id, dest,
-        analyze_history=request.analyze_history,
-        user_id=user_id, source_url=request.url, name=repo_name,
+        analyze_history=body.analyze_history,
+        user_id=user_id, source_url=body.url, name=repo_name,
     )
 
     return IngestResponse(project_id=project_id, status="processing")
