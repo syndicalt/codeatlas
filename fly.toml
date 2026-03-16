@@ -1,0 +1,25 @@
+app = "codeatlas"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+[env]
+  CODEATLAS_CORS_ORIGINS = '["https://codeatlas.fly.dev"]'
+  CODEATLAS_FRONTEND_URL = "https://codeatlas.fly.dev"

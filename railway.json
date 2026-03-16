@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {},
+  "deploy": {},
+  "services": {
+    "backend": {
+      "source": { "directory": "backend" },
+      "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" },
+      "deploy": {
+        "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port $PORT",
+        "healthcheckPath": "/health"
+      }
+    },
+    "frontend": {
+      "source": { "directory": "frontend" },
+      "build": { "builder": "DOCKERFILE", "dockerfilePath": "Dockerfile" }
+    }
+  }
+}
