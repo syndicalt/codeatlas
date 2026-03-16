@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 
 from app.config import settings
 from app.dependencies import get_current_user
+from app.middleware.rate_limit import limiter
 from app.models.schemas import IngestGitHubRequest, IngestResponse, TaskStatusResponse
 from app.services.cloner import clone_repo, extract_zip
 from app.services.graph_builder import (
@@ -89,17 +90,30 @@ def _record_history(
 
 
 @router.post("/github", response_model=IngestResponse)
+@limiter.limit(settings.rate_limit_ingest)
 async def ingest_github(
     request: IngestGitHubRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     user: dict | None = Depends(get_current_user),
 ):
     project_id = str(uuid.uuid4())
     dest = settings.upload_dir / project_id
 
+    access_token = None
+    if user:
+        from app.services.database import get_api_key_for_provider
+        from app.services.encryption import decrypt
+        encrypted = await get_api_key_for_provider(user["id"], "github_token")
+        if encrypted:
+            try:
+                access_token = decrypt(encrypted)
+            except ValueError:
+                pass
+
     try:
         shallow = not request.analyze_history
-        clone_repo(request.url, dest, request.branch, shallow=shallow)
+        clone_repo(request.url, dest, request.branch, shallow=shallow, access_token=access_token)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -119,9 +133,11 @@ async def ingest_github(
 
 
 @router.post("/upload", response_model=IngestResponse)
+@limiter.limit(settings.rate_limit_ingest)
 async def ingest_upload(
     file: UploadFile,
     background_tasks: BackgroundTasks,
+    request: Request,
     user: dict | None = Depends(get_current_user),
 ):
     if not file.filename or not file.filename.endswith(".zip"):
@@ -172,7 +188,9 @@ async def get_status(project_id: str):
 
 
 @router.post("/demo", response_model=IngestResponse)
+@limiter.limit(settings.rate_limit_ingest)
 async def ingest_demo(
+    request: Request,
     background_tasks: BackgroundTasks,
     user: dict | None = Depends(get_current_user),
 ):

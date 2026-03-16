@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     # Database
     database_path: str = "codeatlas.db"
 
+    # Rate limiting
+    rate_limit_default: str = "60/minute"
+    rate_limit_ingest: str = "10/minute"
+    rate_limit_rag: str = "20/minute"
+
+    # Plugin system
+    plugin_dir: str = "plugins"
+
+    # Neo4j (optional)
+    neo4j_uri: str = ""
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+    use_neo4j: bool = False
+
     model_config = {"env_prefix": "CODEATLAS_", "env_file": ".env", "env_file_encoding": "utf-8"}
 
     def get_jwt_secret(self) -> str:

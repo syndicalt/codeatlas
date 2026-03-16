@@ -63,6 +63,16 @@ async def init_db() -> None:
         )
     """)
 
+    await db.execute("""
+        CREATE TABLE IF NOT EXISTS shared_graphs (
+            share_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            elements_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT
+        )
+    """)
+
     await db.commit()
 
 
@@ -215,3 +225,32 @@ async def delete_atlas_history_entry(user_id: str, entry_id: str) -> bool:
     )
     await db.commit()
     return cursor.rowcount > 0
+
+
+# --- Shared Graphs CRUD ---
+
+async def create_shared_graph(share_id: str, project_id: str, elements_json: str) -> None:
+    db = await get_db()
+    await db.execute(
+        "INSERT INTO shared_graphs (share_id, project_id, elements_json) VALUES (?, ?, ?)",
+        (share_id, project_id, elements_json),
+    )
+    await db.commit()
+
+
+async def get_shared_graph(share_id: str) -> dict | None:
+    db = await get_db()
+    cursor = await db.execute(
+        "SELECT * FROM shared_graphs WHERE share_id = ?",
+        (share_id,),
+    )
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def delete_expired_shares() -> None:
+    db = await get_db()
+    await db.execute(
+        "DELETE FROM shared_graphs WHERE expires_at < datetime('now')"
+    )
+    await db.commit()

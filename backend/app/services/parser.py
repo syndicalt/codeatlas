@@ -5,28 +5,21 @@ from app.services.models import ParsedFile
 from app.services.parsers.python_parser import parse_python
 from app.services.parsers.js_ts_parser import parse_js_ts
 from app.services.parsers.java_parser import parse_java
+from app.services.plugin_registry import registry
 
-
-LANGUAGE_MAP = {
-    ".py": "python",
-    ".js": "javascript",
-    ".jsx": "javascript",
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    ".java": "java",
-}
-
-PARSER_MAP = {
-    "python": parse_python,
-    "javascript": parse_js_ts,
-    "typescript": parse_js_ts,
-    "java": parse_java,
-}
+# Register built-in parsers in the plugin registry
+registry.register_function("python", [".py"], parse_python)
+registry.register_function("javascript", [".js", ".jsx"], parse_js_ts)
+registry.register_function("typescript", [".ts", ".tsx"], parse_js_ts)
+registry.register_function("java", [".java"], parse_java)
 
 
 def parse_project(root: Path) -> list[ParsedFile]:
     parsed_files: list[ParsedFile] = []
     file_count = 0
+
+    # Combine configured extensions with any plugin-provided ones
+    allowed = settings.allowed_extensions | registry.supported_extensions
 
     for filepath in sorted(root.rglob("*")):
         if not filepath.is_file():
@@ -38,20 +31,17 @@ def parse_project(root: Path) -> list[ParsedFile]:
             continue
 
         ext = filepath.suffix
-        if ext not in settings.allowed_extensions:
+        if ext not in allowed:
             continue
 
         file_count += 1
         if file_count > settings.max_file_count:
             break
 
-        language = LANGUAGE_MAP.get(ext)
-        if not language:
+        result = registry.get_parser(ext)
+        if not result:
             continue
-
-        parse_fn = PARSER_MAP.get(language)
-        if not parse_fn:
-            continue
+        language, parse_fn = result
 
         try:
             source = filepath.read_text(encoding="utf-8", errors="ignore")

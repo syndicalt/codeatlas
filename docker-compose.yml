@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - CODEATLAS_DATABASE_PATH=/data/codeatlas.db
+      - CODEATLAS_CORS_ORIGINS=["http://localhost","http://localhost:3000"]
+    volumes:
+      - db-data:/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  # Optional: Neo4j for persistent graph storage
+  # neo4j:
+  #   image: neo4j:5
+  #   ports:
+  #     - "7474:7474"
+  #     - "7687:7687"
+  #   environment:
+  #     NEO4J_AUTH: neo4j/codeatlas
+  #   volumes:
+  #     - neo4j-data:/data
+
+volumes:
+  db-data:
+  # neo4j-data:

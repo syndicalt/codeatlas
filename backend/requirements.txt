@@ -17,3 +17,5 @@ PyJWT>=2.8
 cryptography>=42.0
 openai>=1.30
 google-genai>=1.0
+slowapi>=0.1.9
+neo4j>=5.0

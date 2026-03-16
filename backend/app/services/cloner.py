@@ -20,9 +20,21 @@ def validate_github_url(url: str) -> str:
     return url
 
 
-def clone_repo(url: str, dest: Path, branch: str | None = None, shallow: bool = True) -> Path:
+def clone_repo(
+    url: str,
+    dest: Path,
+    branch: str | None = None,
+    shallow: bool = True,
+    access_token: str | None = None,
+) -> Path:
     url = validate_github_url(url)
-    clone_url = url + ".git"
+    if access_token:
+        # Extract owner/repo from validated URL (without .git)
+        parts = url.rstrip("/").split("github.com/", 1)
+        owner_repo = parts[1] if len(parts) == 2 else ""
+        clone_url = f"https://x-access-token:{access_token}@github.com/{owner_repo}.git"
+    else:
+        clone_url = url + ".git"
     kwargs: dict = {}
     if shallow:
         kwargs["depth"] = 1

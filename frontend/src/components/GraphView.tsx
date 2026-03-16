@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import cytoscape from 'cytoscape'
+import fcose from 'cytoscape-fcose'
+
+cytoscape.use(fcose)
 import {
   fetchGraph, searchGraph, filterGraph, exportGraphJSON,
   fetchTimeline, fetchGraphAtCommit, fetchContributors,
+  createShareLink,
 } from '../api/client'
 import type {
   GraphElements, GraphNode, GraphEdge, DependencyScope,
@@ -14,6 +18,7 @@ import ChatPanel from './ChatPanel'
 import { useAuth } from '../contexts/AuthContext'
 import { listApiKeys } from '../api/auth'
 import LoginModal from './LoginModal'
+import { useCollaboration } from '../hooks/useCollaboration'
 
 // --- Theme definitions ---
 
@@ -114,6 +119,21 @@ const THEMES: Record<string, Theme> = {
     module: '#ff6b9d', class: '#ffc857', function: '#ff8c42', external: '#7a5a8a',
     externalBorder: '#c49dd4', imports: '#c77dff', inherits: '#ff6b6b', calls: '#ffc857',
     highlight: '#00ffaa',
+  },
+  highContrast: {
+    name: 'Hi-Con',
+    bg: '#000000', headerBg: '#000000', headerBorder: '#ffffff', panelBg: '#000000',
+    panelBorder: '#ffffff', panelHeaderBorder: '#ffffff',
+    textPrimary: '#ffffff', textSecondary: '#ffffff', textMuted: '#cccccc',
+    inputBg: '#000000', inputBorder: '#ffffff', inputFocusBorder: '#ffff00',
+    btnBg: '#333333', btnText: '#ffffff', btnHoverText: '#ffffff',
+    btnActiveBg: '#ffff00', btnActiveText: '#000000',
+    linkColor: '#00ffff', linkHover: '#ffffff',
+    legendBg: 'rgba(0,0,0,0.95)', badgeBg: '#333333',
+    nodeLabel: '#ffffff', nodeOutline: '#000000', edgeDefault: '#aaaaaa',
+    module: '#0088ff', class: '#00ff00', function: '#ff8800', external: '#cccccc',
+    externalBorder: '#ffffff', imports: '#00aaff', inherits: '#ff00ff', calls: '#ffff00',
+    highlight: '#ff0000',
   },
 }
 
@@ -272,6 +292,28 @@ const LAYOUT_OPTIONS = {
   padding: 40,
 }
 
+const LARGE_GRAPH_THRESHOLD = 2000
+
+/** Get layout options optimized for graph size */
+function getLayoutOptions(nodeCount: number, animated = true) {
+  if (nodeCount > LARGE_GRAPH_THRESHOLD) {
+    return {
+      name: 'fcose',
+      animate: false,
+      quality: 'default' as const,
+      nodeDimensionsIncludeLabels: true,
+      idealEdgeLength: 120,
+      nodeRepulsion: 8000,
+      gravity: 0.4,
+      numIter: 2500,
+      fit: true,
+      padding: 30,
+      randomize: true,
+    }
+  }
+  return { ...LAYOUT_OPTIONS, animate: animated, animationDuration: animated ? 800 : 0 }
+}
+
 /** Create a Cytoscape instance with animated entry */
 function createCy(
   container: HTMLElement,
@@ -281,6 +323,9 @@ function createCy(
   onTapBg: () => void,
   animated = true,
 ): cytoscape.Core {
+  const nodeCount = elements.nodes.length
+  const isLarge = nodeCount > LARGE_GRAPH_THRESHOLD
+
   const cy = cytoscape({
     container,
     elements: [
@@ -288,8 +333,12 @@ function createCy(
       ...elements.edges.map((e) => ({ group: 'edges' as const, ...e })),
     ],
     style: buildCytoStyle(theme),
-    layout: { ...LAYOUT_OPTIONS, animate: animated, animationDuration: animated ? 800 : 0 },
-  })
+    layout: getLayoutOptions(nodeCount, animated),
+    // Performance: disable expensive features for large graphs
+    textureOnViewport: isLarge,
+    hideEdgesOnViewport: isLarge,
+    hideLabelsOnViewport: isLarge,
+  } as any)
 
   // Fade-in: start transparent and animate to full opacity
   if (animated) {
@@ -429,6 +478,10 @@ export default function GraphView() {
   const [hasApiKey, setHasApiKey] = useState(false)
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+
+  // Collaboration
+  const { peers, connected: collabConnected } = useCollaboration(projectId)
 
   useEffect(() => {
     if (user) {
@@ -706,6 +759,16 @@ export default function GraphView() {
     }
   }
 
+  const handleShare = async () => {
+    if (!projectId) return
+    try {
+      const { share_id } = await createShareLink(projectId)
+      const url = `${window.location.origin}/shared/${share_id}`
+      setShareUrl(url)
+      await navigator.clipboard.writeText(url)
+    } catch {}
+  }
+
   function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -851,6 +914,7 @@ export default function GraphView() {
             placeholder="Search nodes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search graph nodes"
             className="flex-1 px-3 py-1.5 rounded text-sm focus:outline-none"
             style={{
               backgroundColor: theme.inputBg, border: `1px solid ${theme.inputBorder}`,
@@ -935,6 +999,29 @@ export default function GraphView() {
               Contributors
             </button>
           )}
+          {/* Collaboration presence */}
+          {collabConnected && peers.length > 0 && (
+            <div className="flex items-center gap-0.5" title={`${peers.length + 1} collaborator${peers.length > 0 ? 's' : ''} online`}>
+              {peers.slice(0, 5).map((p) => (
+                <span key={p.id} className="w-2.5 h-2.5 rounded-full border border-black/30"
+                      style={{ backgroundColor: p.color }} />
+              ))}
+              {peers.length > 5 && (
+                <span className="text-[10px] ml-0.5" style={{ color: theme.textMuted }}>+{peers.length - 5}</span>
+              )}
+            </div>
+          )}
+          <button
+            onClick={handleShare}
+            className="px-2.5 py-1 text-xs rounded transition"
+            style={{
+              backgroundColor: shareUrl ? theme.btnActiveBg : theme.btnBg,
+              color: shareUrl ? theme.btnActiveText : theme.btnText,
+            }}
+            title={shareUrl ? 'Link copied!' : 'Share graph link'}
+          >
+            {shareUrl ? 'Copied!' : 'Share'}
+          </button>
           <button
             onClick={() => { setPanelTab('chat'); setPanelOpen(true) }}
             className="px-2.5 py-1 text-xs rounded transition relative"
@@ -1060,10 +1147,16 @@ export default function GraphView() {
               <p className="text-red-400">{error}</p>
             </div>
           )}
-          <div ref={containerRef} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+          <div ref={containerRef} role="application" aria-label="Code knowledge graph" tabIndex={0}
+               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+
+          {/* Screen reader announcements */}
+          <div aria-live="polite" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}>
+            {selected ? `Selected ${selected.type} node: ${selected.label}, ${selected.connections} connections` : ''}
+          </div>
 
           {/* Legend */}
-          <div className="absolute bottom-3 left-3 flex gap-3 text-xs px-3 py-2 rounded-lg"
+          <div className="absolute bottom-3 left-3 flex gap-3 text-xs px-3 py-2 rounded-lg" role="legend" aria-label="Graph node types"
                style={{ backgroundColor: theme.legendBg, color: theme.textSecondary }}>
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: theme.module }} /> Module

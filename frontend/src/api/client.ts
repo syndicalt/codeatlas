@@ -196,3 +196,17 @@ export async function ragBuildIndex(projectId: string): Promise<{ indexed: boole
   if (!res.ok) throw new Error('Index build failed')
   return res.json()
 }
+
+// --- Share API ---
+
+export async function createShareLink(projectId: string): Promise<{ share_id: string }> {
+  const res = await fetch(`${BASE}/share/${projectId}`, { method: 'POST' })
+  if (!res.ok) throw new Error('Failed to create share link')
+  return res.json()
+}
+
+export async function fetchSharedGraph(shareId: string): Promise<{ share_id: string; project_id: string; elements: GraphElements }> {
+  const res = await fetch(`${BASE}/share/${shareId}`)
+  if (!res.ok) throw new Error('Shared graph not found')
+  return res.json()
+}

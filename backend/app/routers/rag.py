@@ -1,8 +1,10 @@
 """RAG query endpoints for natural language codebase exploration."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
+from app.config import settings
 from app.dependencies import get_current_user
+from app.middleware.rate_limit import limiter
 from app.models.schemas import RagIndexStatus, RagQueryRequest, RagQueryResponse
 from app.services.database import get_api_key_for_provider
 from app.services.encryption import decrypt
@@ -37,9 +39,11 @@ async def _resolve_llm_config(user: dict | None) -> tuple[str | None, str | None
 
 
 @router.post("/{project_id}/query", response_model=RagQueryResponse)
+@limiter.limit(settings.rate_limit_rag)
 async def rag_query(
     project_id: str,
     body: RagQueryRequest,
+    request: Request,
     user: dict | None = Depends(get_current_user),
 ):
     """Ask a natural language question about the codebase."""

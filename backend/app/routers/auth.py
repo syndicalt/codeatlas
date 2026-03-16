@@ -52,6 +52,14 @@ async def github_callback(code: str = Query(...)):
         oauth_provider_id=info["provider_id"],
     )
 
+    if info.get("access_token"):
+        from app.services.encryption import encrypt
+        from app.services.database import set_api_key
+        import uuid
+
+        encrypted = encrypt(info["access_token"])
+        await set_api_key(str(uuid.uuid4()), user["id"], "github_token", encrypted)
+
     token = create_jwt(user["id"])
     return AuthTokenResponse(token=token, user=_user_to_response(user))
 

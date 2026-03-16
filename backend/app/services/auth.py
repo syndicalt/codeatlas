@@ -45,7 +45,7 @@ def github_redirect_url() -> str:
     params = urlencode({
         "client_id": settings.github_client_id,
         "redirect_uri": f"{settings.frontend_url}/auth/callback",
-        "scope": "read:user user:email",
+        "scope": "read:user user:email repo",
         "state": "github",
     })
     return f"{GITHUB_AUTH_URL}?{params}"
@@ -102,6 +102,7 @@ async def github_exchange_code(code: str) -> dict:
             "avatar_url": user_data.get("avatar_url", ""),
             "provider": "github",
             "provider_id": str(user_data["id"]),
+            "access_token": access_token,
         }
 
 
