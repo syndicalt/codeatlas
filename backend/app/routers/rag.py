@@ -63,13 +63,13 @@ async def rag_query(
     user: dict | None = Depends(get_current_user),
 ):
     """Ask a natural language question about the codebase."""
-    project_data = project_store.get(project_id)
-    if project_data is None:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    api_key, provider_name, model = await _resolve_llm_config(user)
-
     try:
+        project_data = project_store.get(project_id)
+        if project_data is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        api_key, provider_name, model = await _resolve_llm_config(user)
+
         agent_resp, conversation_id = await query_agent(
             project_id=project_id,
             message=body.message,
@@ -78,29 +78,31 @@ async def rag_query(
             provider_name=provider_name,
             model=model,
         )
+
+        return RagQueryResponse(
+            project_id=project_id,
+            message_id="",
+            conversation_id=conversation_id,
+            text=agent_resp.text,
+            highlighted_nodes=agent_resp.highlighted_nodes,
+            subgraph_elements=agent_resp.subgraph_elements,
+            code_snippets=[
+                {"file": s["file"], "start_line": s.get("start_line", 0),
+                 "end_line": s.get("end_line", 0), "label": s.get("label", "")}
+                for s in agent_resp.code_snippets
+            ],
+            confidence=agent_resp.confidence,
+            follow_up_suggestions=agent_resp.follow_up_suggestions,
+            is_local_only=agent_resp.is_local_only,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.exception("RAG query failed for project %s", project_id)
         raise HTTPException(
-            status_code=502,
-            detail=f"LLM provider error: {exc}",
+            status_code=500,
+            detail=f"RAG query error: {type(exc).__name__}: {exc}",
         )
-
-    return RagQueryResponse(
-        project_id=project_id,
-        message_id="",  # could be used for streaming later
-        conversation_id=conversation_id,
-        text=agent_resp.text,
-        highlighted_nodes=agent_resp.highlighted_nodes,
-        subgraph_elements=agent_resp.subgraph_elements,
-        code_snippets=[
-            {"file": s["file"], "start_line": s.get("start_line", 0),
-             "end_line": s.get("end_line", 0), "label": s.get("label", "")}
-            for s in agent_resp.code_snippets
-        ],
-        confidence=agent_resp.confidence,
-        follow_up_suggestions=agent_resp.follow_up_suggestions,
-        is_local_only=agent_resp.is_local_only,
-    )
 
 
 @router.get("/{project_id}/index-status", response_model=RagIndexStatus)
