@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tree_sitter_languages import get_language, get_parser
+from tree_sitter_languages import get_parser
 
 from app.services.models import ClassDef, FunctionDef, ImportDef, ParsedFile
 
@@ -55,15 +55,18 @@ def _extract_function(node) -> FunctionDef | None:
     if not name_node:
         return None
     decorators = []
-    # Check preceding siblings for decorators
     prev = node.prev_named_sibling
     while prev and prev.type == "decorator":
         decorators.append(prev.text.decode("utf-8"))
         prev = prev.prev_named_sibling
+
+    calls = _extract_calls(node)
+
     return FunctionDef(
         name=name_node.text.decode("utf-8"),
         line=node.start_point[0] + 1,
         decorators=decorators,
+        calls=calls,
     )
 
 
@@ -93,6 +96,27 @@ def _extract_class(node) -> ClassDef | None:
         bases=bases,
         methods=methods,
     )
+
+
+def _extract_calls(node) -> list[str]:
+    """Recursively find all function/method calls within a node."""
+    calls: list[str] = []
+    _walk_calls(node, calls)
+    return list(dict.fromkeys(calls))  # dedupe preserving order
+
+
+def _walk_calls(node, calls: list[str]):
+    if node.type == "call":
+        func_node = node.child_by_field_name("function")
+        if func_node:
+            if func_node.type == "identifier":
+                calls.append(func_node.text.decode("utf-8"))
+            elif func_node.type == "attribute":
+                attr = func_node.child_by_field_name("attribute")
+                if attr:
+                    calls.append(attr.text.decode("utf-8"))
+    for child in node.children:
+        _walk_calls(child, calls)
 
 
 def _extract_import(node) -> ImportDef | None:

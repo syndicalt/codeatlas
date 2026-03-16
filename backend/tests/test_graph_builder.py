@@ -7,7 +7,7 @@ def _make_parsed_files():
         ParsedFile(
             path="main.py",
             language="python",
-            functions=[FunctionDef(name="main", line=1)],
+            functions=[FunctionDef(name="main", line=1, calls=["helper"])],
             classes=[],
             imports=[ImportDef(module="utils", names=["helper"])],
         ),
@@ -20,7 +20,7 @@ def _make_parsed_files():
                     name="Base",
                     line=5,
                     bases=[],
-                    methods=[FunctionDef(name="run", line=6)],
+                    methods=[FunctionDef(name="run", line=6, calls=["helper"])],
                 ),
             ],
             imports=[],
@@ -46,6 +46,15 @@ def test_build_graph_edges():
     assert ("class:utils.py:Base", "func:utils.py:Base.run", "contains") in edges
 
 
+def test_build_graph_call_edges():
+    G = build_graph(_make_parsed_files())
+    edges = [(u, v, d["relationship"]) for u, v, d in G.edges(data=True)]
+    # main() calls helper()
+    assert ("func:main.py:main", "func:utils.py:helper", "calls") in edges
+    # Base.run() calls helper()
+    assert ("func:utils.py:Base.run", "func:utils.py:helper", "calls") in edges
+
+
 def test_cytoscape_json_format():
     G = build_graph(_make_parsed_files())
     result = graph_to_cytoscape_json(G)
@@ -53,3 +62,25 @@ def test_cytoscape_json_format():
     assert "edges" in result
     assert all("data" in n for n in result["nodes"])
     assert all("data" in e for e in result["edges"])
+
+
+def test_cytoscape_json_has_directory():
+    G = build_graph(_make_parsed_files())
+    result = graph_to_cytoscape_json(G)
+    for node in result["nodes"]:
+        assert "directory" in node["data"]
+
+
+def test_cytoscape_json_has_connections():
+    G = build_graph(_make_parsed_files())
+    result = graph_to_cytoscape_json(G)
+    for node in result["nodes"]:
+        assert "connections" in node["data"]
+        assert isinstance(node["data"]["connections"], int)
+
+
+def test_cytoscape_json_edges_have_weight():
+    G = build_graph(_make_parsed_files())
+    result = graph_to_cytoscape_json(G)
+    for edge in result["edges"]:
+        assert "weight" in edge["data"]

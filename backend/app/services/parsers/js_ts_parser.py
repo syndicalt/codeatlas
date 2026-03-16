@@ -6,7 +6,6 @@ from app.services.models import ClassDef, FunctionDef, ImportDef, ParsedFile
 
 
 def parse_js_ts(source: str, rel_path: str, language: str) -> ParsedFile:
-    # tree-sitter-languages uses "typescript" for .ts and "tsx" for .tsx
     lang_name = language
     if rel_path.endswith(".tsx") or rel_path.endswith(".jsx"):
         lang_name = "tsx" if rel_path.endswith(".tsx") else "javascript"
@@ -26,13 +25,11 @@ def parse_js_ts(source: str, rel_path: str, language: str) -> ParsedFile:
                 functions.append(func)
 
         elif node.type in ("lexical_declaration", "variable_declaration"):
-            # Arrow functions assigned to const/let/var
             func = _extract_arrow_function(node)
             if func:
                 functions.append(func)
 
         elif node.type == "export_statement":
-            # Check exported declarations
             for child in node.named_children:
                 if child.type == "function_declaration":
                     func = _extract_function(child)
@@ -70,9 +67,11 @@ def _extract_function(node) -> FunctionDef | None:
     name_node = node.child_by_field_name("name")
     if not name_node:
         return None
+    calls = _extract_calls(node)
     return FunctionDef(
         name=name_node.text.decode("utf-8"),
         line=node.start_point[0] + 1,
+        calls=calls,
     )
 
 
@@ -82,9 +81,11 @@ def _extract_arrow_function(node) -> FunctionDef | None:
             name_node = child.child_by_field_name("name")
             value_node = child.child_by_field_name("value")
             if name_node and value_node and value_node.type == "arrow_function":
+                calls = _extract_calls(value_node)
                 return FunctionDef(
                     name=name_node.text.decode("utf-8"),
                     line=node.start_point[0] + 1,
+                    calls=calls,
                 )
     return None
 
@@ -97,7 +98,6 @@ def _extract_class(node) -> ClassDef | None:
     bases: list[str] = []
     heritage = node.child_by_field_name("heritage")
     if not heritage:
-        # Try finding class_heritage node in children
         for child in node.children:
             if child.type == "class_heritage":
                 heritage = child
@@ -113,9 +113,11 @@ def _extract_class(node) -> ClassDef | None:
             if child.type == "method_definition":
                 name = child.child_by_field_name("name")
                 if name:
+                    calls = _extract_calls(child)
                     methods.append(FunctionDef(
                         name=name.text.decode("utf-8"),
                         line=child.start_point[0] + 1,
+                        calls=calls,
                     ))
 
     return ClassDef(
@@ -124,6 +126,27 @@ def _extract_class(node) -> ClassDef | None:
         bases=bases,
         methods=methods,
     )
+
+
+def _extract_calls(node) -> list[str]:
+    """Recursively find all function/method calls within a node."""
+    calls: list[str] = []
+    _walk_calls(node, calls)
+    return list(dict.fromkeys(calls))
+
+
+def _walk_calls(node, calls: list[str]):
+    if node.type == "call_expression":
+        func_node = node.child_by_field_name("function")
+        if func_node:
+            if func_node.type == "identifier":
+                calls.append(func_node.text.decode("utf-8"))
+            elif func_node.type == "member_expression":
+                prop = func_node.child_by_field_name("property")
+                if prop:
+                    calls.append(prop.text.decode("utf-8"))
+    for child in node.children:
+        _walk_calls(child, calls)
 
 
 def _extract_import(node) -> ImportDef | None:

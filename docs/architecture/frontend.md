@@ -17,37 +17,49 @@ frontend/
     ├── api/
     │   └── client.ts       # Backend API wrapper functions
     ├── components/
-    │   ├── LandingPage.tsx  # Upload form (URL + ZIP drop zone)
-    │   └── GraphView.tsx    # Cytoscape.js graph visualization
+    │   ├── LandingPage.tsx  # Upload form + demo button + task polling
+    │   └── GraphView.tsx    # Dashboard: graph canvas + search/filter + detail panel
+    ├── hooks/
+    │   └── useTaskPolling.ts # Poll background task status
     └── types/
         └── graph.ts         # TypeScript interfaces for API data
 ```
 
 ## Routing
 
-The app has two routes managed by React Router:
-
 | Path | Component | Purpose |
 |------|-----------|---------|
-| `/` | `LandingPage` | Repository URL input and ZIP upload |
-| `/graph/:projectId` | `GraphView` | Interactive graph visualization |
+| `/` | `LandingPage` | Repository URL input, ZIP upload, and demo button |
+| `/graph/:projectId` | `GraphView` | Dashboard with graph visualization |
 
-After successful ingestion, the user is automatically navigated to the graph view.
+After successful ingestion, the user is automatically navigated to the graph view once background processing completes.
 
 ## Components
 
 ### LandingPage
 
-Two input methods:
+Three input methods:
 
 1. **GitHub URL** — Text input with "Parse" button. Calls `POST /api/ingest/github`.
 2. **ZIP Upload** — Drag-and-drop zone with click-to-browse fallback. Calls `POST /api/ingest/upload`.
+3. **Demo** — "Try Demo Project" button. Calls `POST /api/ingest/demo`.
 
-Both show a loading spinner during analysis and display error messages on failure.
+All three use background processing: the response returns `status: "processing"` and the component polls `/api/ingest/status/{id}` every 1.5 seconds via the `useTaskPolling` hook. A progress bar shows processing progress. On completion, navigates to the graph view.
 
-### GraphView
+### GraphView (Dashboard)
 
-Renders the knowledge graph using Cytoscape.js with these features:
+Split-view layout:
+
+- **Left (~75%)** — Cytoscape.js graph canvas with a legend overlay
+- **Right (320px)** — Collapsible detail panel showing selected node properties and connections
+
+**Toolbar features:**
+
+- **Search input** — Debounced text search (300ms). Matching nodes are highlighted with a yellow border; non-matching nodes dim to 20% opacity.
+- **Type filter dropdown** — All / Module / Class / Function / External
+- **Scope toggle** — All / Internal / External. Fetches a filtered subgraph from the backend and re-renders.
+- **Export buttons** — PNG (client-side via `cy.png()`) and JSON (server-side download)
+- **Panel toggle** — Show/Hide the detail panel
 
 **Node Styles:**
 
@@ -65,28 +77,52 @@ Renders the knowledge graph using Cytoscape.js with these features:
 | Contains | Gray | Solid |
 | Imports | Blue | Dashed |
 | Inherits | Purple | Solid, thicker |
+| Calls | Pink | Dotted |
 
 **Layout:** Uses the COSE (Compound Spring Embedder) algorithm for automatic node positioning.
 
-**Interactions:**
-
-- Click a node to see details (file path, line number, type) in the bottom panel
-- Click empty space to deselect
-- Scroll to zoom, drag to pan
-- Drag nodes to reposition
+**Detail Panel:** Shows the selected node's type, file, line, directory, and connection count. Lists all incoming and outgoing edges grouped by relationship. Clicking a connected node navigates to its details.
 
 ## API Client
 
-`api/client.ts` provides three functions:
+`api/client.ts` provides these functions:
 
 ```typescript
-ingestGitHub(url: string, branch?: string): Promise<IngestResponse>
-ingestUpload(file: File): Promise<IngestResponse>
-fetchGraph(projectId: string): Promise<GraphResponse>
+// Ingestion
+ingestGitHub(url, branch?): Promise<IngestResponse>
+ingestUpload(file): Promise<IngestResponse>
+ingestDemo(): Promise<IngestResponse>
+getTaskStatus(projectId): Promise<TaskStatus>
+
+// Graph data
+fetchGraph(projectId): Promise<GraphResponse>
+searchGraph(projectId, query?, type?, file?): Promise<SearchResult>
+filterGraph(projectId, scope): Promise<GraphResponse>
+getCallChain(projectId, nodeId, direction?, depth?): Promise<GraphResponse>
+exportGraphJSON(projectId): string  // Returns download URL
 ```
 
 All requests go through Vite's development proxy (`/api` → `http://localhost:8000`).
 
+## Hooks
+
+### useTaskPolling
+
+Custom hook that polls task status every 1.5 seconds:
+
+```typescript
+const task = useTaskPolling(projectId)
+// task: { status, progress, error_message, node_count, edge_count } | null
+```
+
+Automatically stops polling when status reaches `ready` or `error`.
+
 ## Type Definitions
 
-TypeScript interfaces in `types/graph.ts` mirror the backend Pydantic schemas, providing type safety across the stack.
+TypeScript interfaces in `types/graph.ts` mirror the backend Pydantic schemas:
+
+- `GraphNode` — includes `directory` and `connections` fields
+- `GraphEdge` — includes `weight` field
+- `TaskStatus` — status polling response
+- `SearchResult` — search response with `total_matches`
+- `DependencyScope` — `'all' | 'internal' | 'external'`

@@ -2,15 +2,16 @@
 
 **Transform complex codebases into intuitive, interactive knowledge graphs.**
 
-CodeAtlas is a browser-based application that ingests a GitHub repository or ZIP file, analyzes the code using Tree-sitter parsing, and builds a comprehensive graph representation. Developers can visualize structural elements, dependencies, and relationships through an interactive Cytoscape.js-powered interface.
+CodeAtlas is a browser-based application that ingests a GitHub repository or ZIP file, analyzes the code using Tree-sitter parsing, and builds a comprehensive graph representation. Developers can visualize structural elements, dependencies, call chains, and relationships through an interactive Cytoscape.js-powered dashboard.
 
 ## What It Does
 
-- **Parses** Python, JavaScript, and TypeScript source files using Tree-sitter
-- **Extracts** functions, classes, modules, imports, and inheritance hierarchies
+- **Parses** Python, JavaScript, TypeScript, and Java source files using Tree-sitter
+- **Extracts** functions, classes, modules, imports, inheritance, and function call chains
 - **Builds** a directed knowledge graph with NetworkX
 - **Renders** an interactive, color-coded visualization in the browser
-- **Supports** GitHub repository URLs and ZIP file uploads
+- **Supports** searching, filtering, dependency scoping, and graph export
+- **Processes** large repos asynchronously with progress tracking
 
 ## Who It's For
 
@@ -21,12 +22,12 @@ CodeAtlas is a browser-based application that ingests a GitHub repository or ZIP
 ## Quick Example
 
 1. Open CodeAtlas in your browser
-2. Paste a GitHub URL like `https://github.com/pallets/flask`
-3. See the entire codebase rendered as an interactive graph — modules in blue, classes in green, functions in orange
+2. Paste a GitHub URL, upload a ZIP, or click **Try Demo Project**
+3. See the codebase rendered as an interactive graph — search, filter, and click nodes to explore
 
 ## Current Status
 
-CodeAtlas is in **Phase 1** — core ingestion and basic graph visualization are functional. See the [Roadmap](development/roadmap.md) for upcoming features including call chain analysis, Git history integration, and a RAG-powered query agent.
+CodeAtlas has completed **Phase 1** (core ingestion) and **Phase 2** (advanced visuals). See the [Roadmap](development/roadmap.md) for upcoming features including Git history integration and a RAG-powered query agent.
 
 ## Get Started
 

@@ -2,7 +2,7 @@
 
 This page traces data through the system from user input to rendered graph.
 
-## Ingestion Flow
+## Ingestion Flow (Background Processing)
 
 ```
 User                Frontend              Backend
@@ -14,33 +14,57 @@ User                Frontend              Backend
  │                    │────────────────────►│
  │                    │                     │  1. Validate URL
  │                    │                     │  2. git clone --depth=1
- │                    │                     │  3. Walk source files
- │                    │                     │  4. Parse with Tree-sitter
- │                    │                     │  5. Build NetworkX graph
- │                    │                     │  6. Export Cytoscape JSON
- │                    │                     │  7. Store in memory
- │                    │  {project_id,       │
- │                    │   node_count, ...}  │
+ │                    │  {project_id,       │  3. Create background task
+ │                    │   status:processing}│
+ │                    │◄────────────────────│
+ │                    │                     │
+ │  Show progress bar │                     │  (Background)
+ │◄──────────────────│                     │  4. Walk source files
+ │                    │  GET /ingest/status │  5. Parse with Tree-sitter
+ │                    │────────────────────►│  6. Extract function calls
+ │                    │  {progress: 50}     │  7. Build NetworkX graph
+ │                    │◄────────────────────│  8. Resolve imports/calls
+ │                    │         ...         │  9. Export Cytoscape JSON
+ │                    │  GET /ingest/status │  10. Store ProjectData
+ │                    │────────────────────►│
+ │                    │  {status: ready}    │
  │                    │◄────────────────────│
  │                    │                     │
  │  Navigate to       │                     │
  │  /graph/:id        │                     │
  │                    │  GET /api/graph/:id │
  │                    │────────────────────►│
- │                    │                     │  8. Lookup in store
- │                    │  {elements: {       │
- │                    │    nodes, edges}}   │
+ │                    │  {elements: {...}}  │  11. Return Cytoscape JSON
  │                    │◄────────────────────│
  │                    │                     │
- │  Render graph      │  9. Cytoscape.js    │
- │◄──────────────────│     renders graph   │
+ │  Render dashboard  │  12. Cytoscape.js   │
+ │◄──────────────────│      renders graph  │
+```
+
+## Query Flow (Search / Filter / Call Chain)
+
+```
+User                Frontend              Backend
+ │                    │                     │
+ │  Type in search    │                     │
+ │──────────────────►│                     │
+ │                    │  (300ms debounce)   │
+ │                    │  GET /graph/:id/    │
+ │                    │  search?q=parse     │
+ │                    │────────────────────►│
+ │                    │                     │  Query NetworkX DiGraph
+ │                    │  {matching nodes}   │
+ │                    │◄────────────────────│
+ │                    │                     │
+ │  Highlighted nodes │  Dim non-matching   │
+ │◄──────────────────│  Highlight matching │
 ```
 
 ## Data Transformations
 
 ### Step 1: Source Code → ParsedFile
 
-Tree-sitter parses raw source into a concrete syntax tree. The language-specific parsers walk this tree to extract structured data:
+Tree-sitter parses raw source into a concrete syntax tree. The language-specific parsers walk this tree to extract structured data, including function calls:
 
 ```python
 # Input: raw Python source
@@ -58,7 +82,7 @@ ParsedFile(
         ClassDef(
             name="UserService",
             line=1,
-            methods=[FunctionDef(name="get_user", line=2)]
+            methods=[FunctionDef(name="get_user", line=2, calls=["find"])]
         )
     ],
     functions=[],
@@ -68,22 +92,23 @@ ParsedFile(
 
 ### Step 2: ParsedFile → NetworkX Graph
 
-The graph builder creates nodes and edges from the parsed data:
+The graph builder creates nodes and edges, including call relationships:
 
 ```
 Nodes:
-  mod:services/user.py     (type=module)
-  class:services/user.py:UserService  (type=class)
-  func:services/user.py:UserService.get_user  (type=function)
+  mod:services/user.py                       (type=module, directory=services)
+  class:services/user.py:UserService         (type=class, directory=services)
+  func:services/user.py:UserService.get_user (type=function, directory=services)
 
 Edges:
-  mod:services/user.py → class:services/user.py:UserService  (contains)
-  class:services/user.py:UserService → func:...:get_user     (contains)
+  mod:services/user.py → class:...:UserService     (contains)
+  class:...:UserService → func:...:get_user         (contains)
+  func:...:get_user → func:...:find                  (calls)
 ```
 
 ### Step 3: NetworkX Graph → Cytoscape.js JSON
 
-The graph is serialized to Cytoscape's native element format:
+The graph is serialized with enriched attributes:
 
 ```json
 {
@@ -94,7 +119,9 @@ The graph is serialized to Cytoscape's native element format:
         "label": "user",
         "type": "module",
         "file": "services/user.py",
-        "line": 1
+        "line": 1,
+        "directory": "services",
+        "connections": 2
       },
       "classes": "module"
     }
@@ -102,16 +129,17 @@ The graph is serialized to Cytoscape's native element format:
   "edges": [
     {
       "data": {
-        "id": "mod:services/user.py->class:services/user.py:UserService",
-        "source": "mod:services/user.py",
-        "target": "class:services/user.py:UserService",
-        "relationship": "contains"
+        "id": "func:...:get_user->func:...:find",
+        "source": "func:services/user.py:UserService.get_user",
+        "target": "func:other/db.py:find",
+        "relationship": "calls",
+        "weight": 1
       }
     }
   ]
 }
 ```
 
-### Step 4: JSON → Visual Graph
+### Step 4: JSON → Visual Dashboard
 
-Cytoscape.js maps the `classes` field on each node to stylesheet selectors, applying colors and shapes. The COSE layout algorithm positions nodes automatically based on their connections.
+Cytoscape.js maps the `classes` field on each node to stylesheet selectors, applying colors and shapes. The COSE layout positions nodes. The detail panel reads from the same data. Search highlighting applies `highlighted`/`dimmed` CSS classes dynamically.

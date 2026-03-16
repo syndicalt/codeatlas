@@ -32,15 +32,14 @@ CodeAtlas is configured via environment variables prefixed with `CODEATLAS_`.
 
 ## Supported Languages
 
-Phase 1 supports the following file extensions:
+| Language | Extensions | Parser |
+|----------|------------|--------|
+| Python | `.py` | `python_parser.py` |
+| JavaScript | `.js`, `.jsx` | `js_ts_parser.py` |
+| TypeScript | `.ts`, `.tsx` | `js_ts_parser.py` |
+| Java | `.java` | `java_parser.py` |
 
-| Language | Extensions |
-|----------|------------|
-| Python | `.py` |
-| JavaScript | `.js`, `.jsx` |
-| TypeScript | `.ts`, `.tsx` |
-
-Additional languages can be added by implementing a new parser in `backend/app/services/parsers/`.
+Additional languages can be added by implementing a new parser in `backend/app/services/parsers/`. See the [Contributing Guide](../development/contributing.md) for details.
 
 ## Skipped Directories
 

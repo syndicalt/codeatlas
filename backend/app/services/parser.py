@@ -4,6 +4,7 @@ from app.config import settings
 from app.services.models import ParsedFile
 from app.services.parsers.python_parser import parse_python
 from app.services.parsers.js_ts_parser import parse_js_ts
+from app.services.parsers.java_parser import parse_java
 
 
 LANGUAGE_MAP = {
@@ -12,12 +13,14 @@ LANGUAGE_MAP = {
     ".jsx": "javascript",
     ".ts": "typescript",
     ".tsx": "typescript",
+    ".java": "java",
 }
 
 PARSER_MAP = {
     "python": parse_python,
     "javascript": parse_js_ts,
     "typescript": parse_js_ts,
+    "java": parse_java,
 }
 
 

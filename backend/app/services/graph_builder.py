@@ -4,61 +4,55 @@ from pathlib import PurePosixPath
 
 import networkx as nx
 
-from app.services.models import ParsedFile
+from app.services.models import ParsedFile, ProjectData
 
 
-# In-memory project store: project_id -> cytoscape JSON
-project_store: dict[str, dict] = {}
+# In-memory project store: project_id -> ProjectData
+project_store: dict[str, ProjectData] = {}
 
 
 def build_graph(parsed_files: list[ParsedFile]) -> nx.DiGraph:
     G = nx.DiGraph()
 
-    # Map file paths to module IDs for import resolution
     path_to_module: dict[str, str] = {}
 
     for pf in parsed_files:
         module_id = f"mod:{pf.path}"
         label = PurePosixPath(pf.path).stem
-        G.add_node(module_id, label=label, type="module", file=pf.path, line=1)
+        directory = str(PurePosixPath(pf.path).parent)
+        if directory == ".":
+            directory = ""
+        G.add_node(module_id, label=label, type="module", file=pf.path, line=1, directory=directory)
         path_to_module[pf.path] = module_id
 
-        # Add classes
         for cls in pf.classes:
             cls_id = f"class:{pf.path}:{cls.name}"
-            G.add_node(cls_id, label=cls.name, type="class", file=pf.path, line=cls.line)
+            G.add_node(cls_id, label=cls.name, type="class", file=pf.path, line=cls.line, directory=directory)
             G.add_edge(module_id, cls_id, relationship="contains")
 
-            # Add methods
             for method in cls.methods:
                 method_id = f"func:{pf.path}:{cls.name}.{method.name}"
-                G.add_node(method_id, label=f"{cls.name}.{method.name}", type="function", file=pf.path, line=method.line)
+                G.add_node(method_id, label=f"{cls.name}.{method.name}", type="function", file=pf.path, line=method.line, directory=directory)
                 G.add_edge(cls_id, method_id, relationship="contains")
 
-        # Add top-level functions
         for func in pf.functions:
             func_id = f"func:{pf.path}:{func.name}"
-            G.add_node(func_id, label=func.name, type="function", file=pf.path, line=func.line)
+            G.add_node(func_id, label=func.name, type="function", file=pf.path, line=func.line, directory=directory)
             G.add_edge(module_id, func_id, relationship="contains")
 
-    # Resolve imports and inheritance
     _resolve_imports(G, parsed_files, path_to_module)
     _resolve_inheritance(G, parsed_files)
+    _resolve_calls(G, parsed_files)
 
     return G
 
 
 def _resolve_imports(G: nx.DiGraph, parsed_files: list[ParsedFile], path_to_module: dict[str, str]):
-    """Create import edges between modules."""
-    # Build lookup: module dotted path -> file path
     module_lookup: dict[str, str] = {}
     for path in path_to_module:
-        # Convert file path to possible import path
-        # e.g., "src/utils/helper.py" -> "src.utils.helper"
         p = PurePosixPath(path)
         stem = str(p.with_suffix("")).replace("/", ".")
         module_lookup[stem] = path
-        # Also store just the filename stem
         module_lookup[p.stem] = path
 
     for pf in parsed_files:
@@ -70,16 +64,13 @@ def _resolve_imports(G: nx.DiGraph, parsed_files: list[ParsedFile], path_to_modu
                 if source_id != target_id:
                     G.add_edge(source_id, target_id, relationship="imports")
             else:
-                # External dependency — add as an external node
                 ext_id = f"ext:{imp.module}"
                 if not G.has_node(ext_id):
-                    G.add_node(ext_id, label=imp.module, type="external", file="", line=0)
+                    G.add_node(ext_id, label=imp.module, type="external", file="", line=0, directory="")
                 G.add_edge(source_id, ext_id, relationship="imports")
 
 
 def _resolve_inheritance(G: nx.DiGraph, parsed_files: list[ParsedFile]):
-    """Create inheritance edges between classes."""
-    # Build lookup: class name -> node id
     class_lookup: dict[str, str] = {}
     for pf in parsed_files:
         for cls in pf.classes:
@@ -96,8 +87,60 @@ def _resolve_inheritance(G: nx.DiGraph, parsed_files: list[ParsedFile]):
                     G.add_edge(cls_id, base_id, relationship="inherits")
 
 
+def _resolve_calls(G: nx.DiGraph, parsed_files: list[ParsedFile]):
+    """Create call edges between functions."""
+    # Build lookup: function name -> list of (node_id, file_path)
+    func_lookup: dict[str, list[tuple[str, str]]] = {}
+    for pf in parsed_files:
+        for func in pf.functions:
+            func_id = f"func:{pf.path}:{func.name}"
+            func_lookup.setdefault(func.name, []).append((func_id, pf.path))
+        for cls in pf.classes:
+            for method in cls.methods:
+                method_id = f"func:{pf.path}:{cls.name}.{method.name}"
+                func_lookup.setdefault(method.name, []).append((method_id, pf.path))
+
+    for pf in parsed_files:
+        for func in pf.functions:
+            caller_id = f"func:{pf.path}:{func.name}"
+            _add_call_edges(G, caller_id, pf.path, func.calls, func_lookup)
+        for cls in pf.classes:
+            for method in cls.methods:
+                caller_id = f"func:{pf.path}:{cls.name}.{method.name}"
+                _add_call_edges(G, caller_id, pf.path, method.calls, func_lookup)
+
+
+def _add_call_edges(G: nx.DiGraph, caller_id: str, caller_path: str, calls: list[str],
+                    func_lookup: dict[str, list[tuple[str, str]]]):
+    for call_name in calls:
+        candidates = func_lookup.get(call_name)
+        if not candidates:
+            continue
+        # Prefer same-file match, then same-directory, then first match
+        target_id = None
+        caller_dir = str(PurePosixPath(caller_path).parent)
+        same_file = [c for c in candidates if c[1] == caller_path and c[0] != caller_id]
+        same_dir = [c for c in candidates if str(PurePosixPath(c[1]).parent) == caller_dir and c[0] != caller_id]
+        other = [c for c in candidates if c[0] != caller_id]
+
+        if same_file:
+            target_id = same_file[0][0]
+        elif same_dir:
+            target_id = same_dir[0][0]
+        elif other:
+            target_id = other[0][0]
+
+        if target_id and not G.has_edge(caller_id, target_id):
+            G.add_edge(caller_id, target_id, relationship="calls")
+
+
 def graph_to_cytoscape_json(G: nx.DiGraph) -> dict:
     """Convert NetworkX graph to Cytoscape.js elements format."""
+    # Precompute connection counts per node
+    connection_count: dict[str, int] = {}
+    for node_id in G.nodes:
+        connection_count[node_id] = G.in_degree(node_id) + G.out_degree(node_id)
+
     nodes = []
     for node_id, attrs in G.nodes(data=True):
         nodes.append({
@@ -107,6 +150,8 @@ def graph_to_cytoscape_json(G: nx.DiGraph) -> dict:
                 "type": attrs.get("type", "unknown"),
                 "file": attrs.get("file", ""),
                 "line": attrs.get("line", 0),
+                "directory": attrs.get("directory", ""),
+                "connections": connection_count.get(node_id, 0),
             },
             "classes": attrs.get("type", "unknown"),
         })
@@ -119,6 +164,7 @@ def graph_to_cytoscape_json(G: nx.DiGraph) -> dict:
                 "source": source,
                 "target": target,
                 "relationship": attrs.get("relationship", ""),
+                "weight": 1,
             },
         })
 

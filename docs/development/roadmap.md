@@ -17,18 +17,22 @@ CodeAtlas is being developed in five phases. Each phase builds on the previous o
 - [x] Color-coded nodes by type (module, class, function, external)
 - [x] Backend test suite (9 tests passing)
 
-## Phase 2: Advanced Visuals
+## Phase 2: Advanced Visuals :white_check_mark:
 
-**Focus:** Richer interaction and deeper analysis
+**Status: Complete**
 
-- [ ] Node expansion/collapse (show/hide module contents)
-- [ ] Search and filter by name, type, or file path
-- [ ] Call chain analysis — trace function invocations across files
-- [ ] Dependency scope filtering (internal only, external only, all)
-- [ ] Graph export to PNG, SVG, and JSON
-- [ ] Node clustering by directory/package
-- [ ] Edge weight visualization (number of connections)
-- [ ] Background task processing for large repositories
+- [x] Java language parser (classes, interfaces, methods, constructors, imports)
+- [x] Function call extraction across all parsers (Python, JS/TS, Java)
+- [x] Call chain analysis — trace function invocations across files (BFS traversal)
+- [x] Search by name, type, or file path (debounced, with highlighting)
+- [x] Dependency scope filtering (all / internal / external)
+- [x] Graph export to PNG (client-side) and JSON (server-side download)
+- [x] Edge weight visualization
+- [x] Background task processing with progress polling
+- [x] Demo mode with bundled sample project
+- [x] Dashboard split-view layout (graph canvas + collapsible detail panel)
+- [x] Node detail modal with focus management
+- [x] Backend test suite expanded to 21 tests
 
 ## Phase 3: History Integration
 

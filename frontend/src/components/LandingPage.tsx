@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ingestGitHub, ingestUpload } from '../api/client'
+import { ingestGitHub, ingestUpload, ingestDemo } from '../api/client'
+import { useTaskPolling } from '../hooks/useTaskPolling'
 
 export default function LandingPage() {
   const navigate = useNavigate()
@@ -8,37 +9,51 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [dragOver, setDragOver] = useState(false)
+  const [pendingId, setPendingId] = useState<string | null>(null)
 
-  const handleGitHub = async () => {
-    if (!url.trim()) return
+  const task = useTaskPolling(pendingId)
+
+  // Navigate when task completes
+  useEffect(() => {
+    if (task?.status === 'ready') {
+      navigate(`/graph/${task.project_id}`)
+    } else if (task?.status === 'error') {
+      setError(task.error_message || 'Processing failed')
+      setLoading(false)
+      setPendingId(null)
+    }
+  }, [task, navigate])
+
+  const startIngest = async (fn: () => Promise<{ project_id: string; status: string }>) => {
     setLoading(true)
     setError('')
     try {
-      const res = await ingestGitHub(url.trim())
-      navigate(`/graph/${res.project_id}`)
+      const res = await fn()
+      if (res.status === 'processing') {
+        setPendingId(res.project_id)
+      } else {
+        navigate(`/graph/${res.project_id}`)
+      }
     } catch (e: any) {
       setError(e.message)
-    } finally {
       setLoading(false)
     }
   }
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleGitHub = () => {
+    if (!url.trim()) return
+    startIngest(() => ingestGitHub(url.trim()))
+  }
+
+  const handleFile = useCallback((file: File) => {
     if (!file.name.endsWith('.zip')) {
       setError('Only .zip files are accepted')
       return
     }
-    setLoading(true)
-    setError('')
-    try {
-      const res = await ingestUpload(file)
-      navigate(`/graph/${res.project_id}`)
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
-  }, [navigate])
+    startIngest(() => ingestUpload(file))
+  }, [])
+
+  const handleDemo = () => startIngest(() => ingestDemo())
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -46,6 +61,8 @@ export default function LandingPage() {
     const file = e.dataTransfer.files[0]
     if (file) handleFile(file)
   }, [handleFile])
+
+  const progress = task?.progress ?? 0
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-8">
@@ -89,6 +106,7 @@ export default function LandingPage() {
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => {
+            if (loading) return
             const input = document.createElement('input')
             input.type = 'file'
             input.accept = '.zip'
@@ -108,11 +126,32 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Loading / Error */}
+        {/* Demo button */}
+        <div className="text-center">
+          <button
+            onClick={handleDemo}
+            disabled={loading}
+            className="px-5 py-2.5 border border-slate-600 hover:border-slate-400
+                       text-slate-300 hover:text-white rounded-lg text-sm transition
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Try Demo Project
+          </button>
+        </div>
+
+        {/* Loading / Progress */}
         {loading && (
-          <div className="text-center">
+          <div className="text-center space-y-3">
             <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-slate-400 mt-2">Analyzing codebase...</p>
+            <p className="text-slate-400">Analyzing codebase...</p>
+            {progress > 0 && (
+              <div className="w-full bg-slate-700 rounded-full h-2">
+                <div
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            )}
           </div>
         )}
         {error && (

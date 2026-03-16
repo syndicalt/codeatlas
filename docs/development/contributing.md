@@ -4,18 +4,41 @@
 
 ```
 codeatlas/
-├── backend/          # Python FastAPI server
-│   ├── app/          # Application code
-│   │   ├── routers/  # API endpoints
-│   │   ├── services/ # Business logic
-│   │   └── models/   # Pydantic schemas
-│   └── tests/        # Pytest tests
-├── frontend/         # React TypeScript app
+├── backend/              # Python FastAPI server
+│   ├── app/
+│   │   ├── main.py       # FastAPI app, CORS, lifespan
+│   │   ├── config.py     # Settings via pydantic-settings
+│   │   ├── routers/
+│   │   │   ├── ingest.py # Ingestion + demo + status endpoints
+│   │   │   └── graph.py  # Graph data + search + filter + callchain + export
+│   │   ├── services/
+│   │   │   ├── models.py         # Shared dataclasses
+│   │   │   ├── cloner.py         # Git clone + ZIP extraction
+│   │   │   ├── parser.py         # Orchestrator: dispatches to language parsers
+│   │   │   ├── graph_builder.py  # NetworkX graph + Cytoscape JSON export
+│   │   │   ├── graph_query.py    # Search, filter, call chain traversal
+│   │   │   ├── task_manager.py   # Background task status tracking
+│   │   │   └── parsers/
+│   │   │       ├── python_parser.py  # Tree-sitter Python
+│   │   │       ├── js_ts_parser.py   # Tree-sitter JS/TS
+│   │   │       └── java_parser.py    # Tree-sitter Java
+│   │   ├── models/
+│   │   │   └── schemas.py   # Pydantic request/response models
+│   │   └── data/
+│   │       └── sample/       # Bundled demo project
+│   └── tests/                # Pytest tests (21 tests)
+├── frontend/                 # React TypeScript app
 │   └── src/
-│       ├── api/       # Backend API client
-│       ├── components/ # React components
-│       └── types/     # TypeScript interfaces
-└── docs/             # Documentation (MkDocs)
+│       ├── api/
+│       │   └── client.ts     # Backend API wrapper functions
+│       ├── components/
+│       │   ├── LandingPage.tsx  # Upload form + demo + task polling
+│       │   └── GraphView.tsx    # Dashboard: graph + search + detail panel
+│       ├── hooks/
+│       │   └── useTaskPolling.ts # Poll background task status
+│       └── types/
+│           └── graph.ts      # TypeScript interfaces
+└── docs/                     # Documentation (MkDocs Material)
 ```
 
 ## Development Setup
@@ -49,7 +72,7 @@ To add support for a new programming language:
 
     def parse_{language}(source: str, rel_path: str, language: str) -> ParsedFile:
         # Use tree-sitter to parse the source
-        # Extract functions, classes, and imports
+        # Extract functions, classes, imports, and function calls
         # Return a ParsedFile
         ...
     ```
@@ -64,7 +87,7 @@ To add support for a new programming language:
 
 4. **Write tests** in `backend/tests/test_parser.py`
 
-    Add test cases for the new language's functions, classes, and imports.
+    Add test cases for the new language's functions, classes, imports, and function calls.
 
 ## Code Style
 

@@ -2,7 +2,7 @@
 
 ## Backend Tests
 
-Backend tests use **pytest** and are located in `backend/tests/`.
+Backend tests use **pytest** and are located in `backend/tests/`. The current suite has **21 tests** covering all three language parsers and the graph builder.
 
 ### Running Tests
 
@@ -13,11 +13,11 @@ python -m pytest tests/ -v
 
 ### Test Structure
 
-| File | Coverage |
-|------|----------|
-| `test_parser.py` | Python parser (functions, classes, imports), JS/TS parser (functions, classes, imports) |
-| `test_graph_builder.py` | Graph node creation, edge creation, Cytoscape JSON export format |
-| `conftest.py` | FastAPI TestClient fixture |
+| File | Tests | Coverage |
+|------|-------|----------|
+| `test_parser.py` | 11 | Python parser (functions, classes, imports, calls, method calls), JS/TS parser (functions, classes, imports, calls), Java parser (classes, inheritance, imports, calls, interfaces) |
+| `test_graph_builder.py` | 7 | Graph node creation, edge creation, call edges, Cytoscape JSON format, directory attributes, connection counts, edge weights |
+| `conftest.py` | — | FastAPI TestClient fixture |
 
 ### Parser Tests
 
@@ -39,9 +39,21 @@ def greet(name):
 
 Each language parser is tested for:
 
-- Function extraction (including arrow functions for JS/TS)
-- Class extraction (including base classes / extends)
-- Import extraction (various import styles)
+- Function extraction (including arrow functions for JS/TS, constructors for Java)
+- Class extraction (including base classes, extends, implements)
+- Import extraction (various import styles per language)
+- **Function call extraction** — verifying that `calls` lists are populated from AST call nodes
+- **Method call extraction** — verifying attribute/member expression calls (e.g., `self.db.find()`)
+
+#### Java-Specific Tests
+
+The Java parser has dedicated tests for:
+
+- **Class declarations** with superclass extraction (`extends`)
+- **Interface declarations** with extends extraction
+- **Method and constructor declarations**
+- **Import declarations** (e.g., `import java.util.List`)
+- **Method invocations** extracted from method bodies
 
 ### Graph Builder Tests
 
@@ -49,7 +61,11 @@ Graph builder tests verify the structural correctness of the output:
 
 - **Node creation** — Modules, functions, classes, and methods produce expected node IDs
 - **Edge creation** — Contains, imports, and inherits relationships are correctly established
+- **Call edges** — Function-to-function call relationships are resolved (same-file > same-directory > global)
 - **Cytoscape JSON** — Output matches the `{ nodes: [...], edges: [...] }` structure with required `data` fields
+- **Directory attributes** — Each node includes the correct parent directory path
+- **Connection counts** — The `connections` field equals in-degree + out-degree
+- **Edge weights** — Each edge includes a `weight` field
 
 ### Writing New Tests
 
@@ -58,6 +74,7 @@ When adding a new parser or feature:
 1. Add test functions to the appropriate test file
 2. Use inline source strings rather than fixture files for parser tests
 3. Test both happy paths and edge cases (empty files, malformed syntax)
+4. For new parsers, include tests for function calls extraction
 
 ```python
 def test_parse_empty_file():

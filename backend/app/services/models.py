@@ -6,6 +6,7 @@ class FunctionDef:
     name: str
     line: int
     decorators: list[str] = field(default_factory=list)
+    calls: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -29,3 +30,10 @@ class ParsedFile:
     functions: list[FunctionDef] = field(default_factory=list)
     classes: list[ClassDef] = field(default_factory=list)
     imports: list[ImportDef] = field(default_factory=list)
+
+
+@dataclass
+class ProjectData:
+    """Holds both the NetworkX graph and the Cytoscape JSON for a project."""
+    cytoscape_json: dict
+    graph: object  # nx.DiGraph — typed as object to avoid circular import
